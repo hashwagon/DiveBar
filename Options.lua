@@ -376,6 +376,10 @@ local function Dropdown(parent, width, itemsFn, get, apply)
 	return box
 end
 
+-- The sticky preview: heading and tick boxes above the bar, the divider below it.
+local PREVIEW_TOP = 34
+local PREVIEW_BOTTOM = 6
+
 local SLIDER_W = 270
 local THUMB_W = 32
 local ARROW_W = 24
@@ -631,7 +635,10 @@ function DiveBar:SyncOptions()
 	dim(self.xpBadgeFormat, levelOff)
 	fade(self.xpBadgeFormatLabel, levelOff)
 	if self.xpLevelTimeSize then
-		self.xpLevelTimeSize:SetLocked(levelOff)
+		self.xpLevelTimeSize:SetLocked(profile.xpLevelTime ~= "badge")
+	end
+	if self.xpBadgeTextSize then
+		self.xpBadgeTextSize:SetLocked(levelOff)
 	end
 	fade(self.xpLevelTimeNote, levelOff)
 	if self.blizzNoteText then
@@ -643,6 +650,9 @@ function DiveBar:SyncOptions()
 	end
 	if self.LayoutFeatureRows then
 		self:LayoutFeatureRows()
+	end
+	if self.LayoutPreviewChecks then
+		self:LayoutPreviewChecks()
 	end
 	if self.LayoutOptions then
 		self:LayoutOptions()
@@ -1221,17 +1231,26 @@ function DiveBar:BuildOptionSections(body)
 	self.xpBadgeFormat = formatDrop
 	self.xpBadgeFormatLabel = formatLabel
 	y = y - 32
-	local levelSize = Slider(xpHost, "Size", 4, 24, 1, function()
+	local textSize = Slider(xpHost, "Text size", 4, 24, 1, function()
+		return DiveBar.profile.xpBadgeTextSize
+	end, function(value)
+		DiveBar.profile.xpBadgeTextSize = math.floor(value + 0.5)
+	end, function(value)
+		return tostring(math.floor(value + 0.5))
+	end)
+	textSize:SetPoint("TOPLEFT", 8, y)
+	self.xpBadgeTextSize = textSize
+	local levelSize = Slider(xpHost, "Badge padding", 0, 24, 1, function()
 		return DiveBar.profile.xpLevelTimeSize
 	end, function(value)
 		DiveBar.profile.xpLevelTimeSize = math.floor(value + 0.5)
 	end, function(value)
 		return tostring(math.floor(value + 0.5))
 	end)
-	levelSize:SetPoint("TOPLEFT", 8, y)
+	levelSize:SetPoint("TOPLEFT", 310, y)
 	self.xpLevelTimeSize = levelSize
 	y = y - 58
-	local levelNote = Cream(xpHost, "Ends where your experience ends. Shows an infinity sign until you earn experience this session. Size scales the whole badge.")
+	local levelNote = Cream(xpHost, "Ends where your experience ends. Shows an infinity sign until you earn experience this session. Text size sets the time. Badge padding sets the room around it, so large text can sit in a snug badge.")
 	levelNote:SetPoint("TOPLEFT", 8, y)
 	levelNote:SetWidth(560)
 	self.xpLevelTimeNote = levelNote
@@ -1352,26 +1371,52 @@ function DiveBar:BuildOptionSections(body)
 	self:LayoutFeatureRows()
 end
 
+-- Order follows the Bars section, right-aligned on the Preview heading.
+function DiveBar:LayoutPreviewChecks()
+	local header = self.previewHeader
+	local checks = self.previewChecks
+	if not header or not checks or not self.profile then
+		return
+	end
+	local order = self.OrderedFeatures(self.profile)
+	local right = 608
+	for i = #order, 1, -1 do
+		local check = checks[order[i]]
+		if check then
+			local left = right - math.ceil(check.label:GetStringWidth() or 0) - 2 - 24
+			check:ClearAllPoints()
+			check:SetPoint("TOPLEFT", header, "TOPLEFT", left, -4)
+			right = left - 14
+		end
+	end
+end
+
 function DiveBar:FitPreview()
+	local header = self.previewHeader
 	local holder = self.previewHolder
 	local bar = self.preview
 	local scrollContent = self.optionsContent
-	if not holder or not bar or not scrollContent then
+	if not header or not holder or not bar or not scrollContent then
 		return
 	end
-	local height = bar:GetHeight() or 0
+	local empty = self.previewEmpty and true or false
+	bar:SetShown(not empty)
+	if self.previewEmptyText then
+		self.previewEmptyText:SetShown(empty)
+	end
+	local height = empty and 16 or (bar:GetHeight() or 0)
 	if height < 8 then
 		height = 8
 	end
 	-- A little air above and below the bar, and no empty block under it.
 	local holderHeight = math.floor(height + 12 + 0.5)
-	local top = -(self.previewAnchorY or 0)
-	local bodyHeight = self.previewBodyHeight or 0
-	local total = top + holderHeight + 4 + bodyHeight + 8
-	if math.abs((holder:GetHeight() or 0) - holderHeight) < 0.5 and math.abs((scrollContent:GetHeight() or 0) - total) < 0.5 then
+	local headerHeight = PREVIEW_TOP + holderHeight + PREVIEW_BOTTOM
+	local total = 4 + (self.previewBodyHeight or 0) + 8
+	if math.abs((holder:GetHeight() or 0) - holderHeight) < 0.5 and math.abs((header:GetHeight() or 0) - headerHeight) < 0.5 and math.abs((scrollContent:GetHeight() or 0) - total) < 0.5 then
 		return
 	end
 	holder:SetHeight(holderHeight)
+	header:SetHeight(headerHeight)
 	scrollContent:SetHeight(total)
 	if self.UpdateOptionsScroll then
 		self.UpdateOptionsScroll()
@@ -1393,7 +1438,7 @@ function DiveBar:CreateOptions()
 		panel = (ok and created) or CreateFrame("Frame", "DiveBarOptions", UIParent)
 	end
 	self.options = panel
-	panel:SetSize(720, 620)
+	panel:SetSize(720, 660)
 	panel:SetFrameStrata("DIALOG")
 	panel:SetClampedToScreen(true)
 	panel:SetMovable(true)
@@ -1564,25 +1609,54 @@ function DiveBar:CreateOptions()
 		end)
 	end
 
-	local previewLabel = GoldLabel(content, "Preview", 16)
+	local header = CreateFrame("Frame", nil, panel)
+	header:SetPoint("TOPLEFT", panel, "TOPLEFT", contentLeft, contentTop)
+	header:SetPoint("TOPRIGHT", panel, "TOPRIGHT", contentRight, contentTop)
+	header:SetHeight(PREVIEW_TOP + 28 + PREVIEW_BOTTOM)
+	self.previewHeader = header
+	local previewLabel = GoldLabel(header, "Preview", 16)
 	previewLabel:SetPoint("TOPLEFT", 8, -8)
-	local previewLine = content:CreateTexture(nil, "ARTWORK")
+	local previewLine = header:CreateTexture(nil, "ARTWORK")
 	previewLine:SetPoint("TOPLEFT", 8, -26)
 	previewLine:SetSize(600, 1)
 	ColorTex(previewLine, 1, 0.82, 0, 0.4)
-	local previewHolder = CreateFrame("Frame", nil, content)
-	previewHolder:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -36)
-	previewHolder:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -36)
+	self.previewChecks = {}
+	for n = 1, #DiveBar.FEATURE_LIST do
+		local feature = DiveBar.FEATURE_LIST[n]
+		local check = Check(header, DiveBar.FEATURE_LABEL[feature], function(value)
+			DiveBar.previewShow[feature] = value
+		end)
+		check.Refresh = function()
+			local on = DiveBar.profile[feature] and true or false
+			check:SetChecked(on and DiveBar.previewShow[feature] ~= false)
+			check:SetDimmed(not on)
+		end
+		self.previewChecks[feature] = check
+	end
+	local previewHolder = CreateFrame("Frame", nil, header)
+	previewHolder:SetPoint("TOPLEFT", header, "TOPLEFT", 0, -PREVIEW_TOP)
+	previewHolder:SetPoint("TOPRIGHT", header, "TOPRIGHT", 0, -PREVIEW_TOP)
 	previewHolder:SetHeight(28)
-	self.previewAnchorY = -36
 	self.previewHolder = previewHolder
 	self.preview = self:BuildBar(nil, previewHolder, false)
 	self.preview:SetPoint("TOP", previewHolder, "TOP", 0, -6)
 	self.preview:Show()
+	local previewEmpty = Cream(previewHolder, "Tick a bar above to preview it.")
+	previewEmpty:SetPoint("CENTER")
+	previewEmpty:Hide()
+	self.previewEmptyText = previewEmpty
+	local headerLine = header:CreateTexture(nil, "ARTWORK")
+	headerLine:SetPoint("BOTTOMLEFT", 8, 0)
+	headerLine:SetSize(600, 1)
+	ColorTex(headerLine, 1, 0.82, 0, 0.4)
+
+	scroll:ClearAllPoints()
+	scroll:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -4)
+	scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", contentRight, contentBottom)
 
 	local body = CreateFrame("Frame", nil, content)
-	body:SetPoint("TOPLEFT", previewHolder, "BOTTOMLEFT", 0, -4)
-	body:SetPoint("TOPRIGHT", previewHolder, "BOTTOMRIGHT", 0, -4)
+	body:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -4)
+	body:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -4)
 	body:SetHeight(1)
 	self.optionsBody = body
 

@@ -47,7 +47,7 @@ DiveBar.DEFAULTS = {
 	textSize = 10,
 	lock = false,
 	border = 4,
-	margin = 2,
+	margin = 0,
 	roundedCorners = true,
 	order = { "cast", "timers", "swings", "xp" },
 	anchor = "xp",
@@ -77,7 +77,8 @@ DiveBar.DEFAULTS = {
 	showXPRate = true,
 	xpLevelTime = "badge",
 	xpBadgeFormat = "decimal",
-	xpLevelTimeSize = 7,
+	xpLevelTimeSize = 2,
+	xpBadgeTextSize = 4,
 	xpHeight = 6,
 	xpPadding = 0,
 	colors = {
@@ -158,6 +159,10 @@ function DiveBar.Migrate(profile)
 	profile.textScaled = true
 	if profile.xpLevelTime == nil and profile.showXPBadge == false then
 		profile.xpLevelTime = "off"
+	end
+	-- Text size used to follow the badge size. Keep that look, then let them move apart.
+	if profile.xpBadgeTextSize == nil and tonumber(profile.xpLevelTimeSize) then
+		profile.xpBadgeTextSize = profile.xpLevelTimeSize
 	end
 	profile.showXPBadge = nil
 	if profile.order == nil then
@@ -326,7 +331,8 @@ function DiveBar.Sanitize(profile)
 	number("border", 1, 20)
 	number("margin", 0, 20)
 	number("xpHeight", 2, 40)
-	number("xpLevelTimeSize", 4, 24)
+	number("xpLevelTimeSize", 0, 24)
+	number("xpBadgeTextSize", 4, 24)
 	for _, key in pairs(DiveBar.PADDING_KEY) do
 		number(key, 0, 20)
 	end
@@ -741,6 +747,8 @@ DiveBar.QUEST_COLOR = { 1, 0.82, 0 }
 DiveBar.XP_COLOR_TOP = { 0.55, 0.78, 1.0 }
 DiveBar.RESTED_COLOR_TOP = { 0.82, 0.45, 0.86 }
 DiveBar.QUEST_COLOR_TOP = { 1, 0.95, 0.55 }
+-- The badge marker is a thin line on a dark fill, so it needs a lighter blue than the bar.
+DiveBar.XP_BADGE_MARK_COLOR = { 0.3, 0.68, 1.0 }
 
 function DiveBar.XPRoom(current)
 	local value = tonumber(current) or 0

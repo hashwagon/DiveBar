@@ -214,19 +214,63 @@ function DiveBar.FormatLevelTime(seconds, style)
 	return string.format("%dd", math.floor(seconds / 86400 + 0.5))
 end
 
--- The Size setting scales the whole badge. It is centered on the strip and may
--- reach past the frame. Its rim is the frame's line, thinned so a small badge keeps room for the number.
--- Returns font, rim, horizontal padding, height.
-function DiveBar.XPBadgeSize(size, frameLine)
-	local font = tonumber(size) or 10
+-- One width per format, sized for the longest ordinary reading.
+-- Decimal covers 59m, 9.9h and 9.9d. Clock covers 23h 59m and 9d 23h.
+function DiveBar.XPBadgeSample(format)
+	if format == "clock" then
+		return "23h 59m"
+	end
+	return "9.9d"
+end
+
+-- Text size only sets the font. Padding is the room between the time and the
+-- border, in pixels, so the two move apart: big text can sit in a snug badge.
+-- Padding 0 still leaves a hair of space so the value does not touch the line.
+-- The caller adds the format's sample width. Returns rim, side padding, height.
+function DiveBar.XPBadgeLayout(textSize, padding, frameLine, rounded)
+	local font = tonumber(textSize) or 10
 	if font < 4 then
 		font = 4
 	end
-	local rim = math.min(tonumber(frameLine) or 2, font * 0.5)
+	local extra = tonumber(padding) or 0
+	if extra < 0 then
+		extra = 0
+	end
+	local rim = tonumber(frameLine) or 2
 	if rim < 2 then
 		rim = 2
 	end
-	return font, rim, math.max(rim + 2, math.floor(font * 0.5 + 0.5)), math.floor(font + rim * 2 + 4 + 0.5)
+	local gapX = 1 + extra * 0.75
+	local gapY = 0.5 + extra * 0.4
+	local inset = DiveBar.ContentInset(rim, rounded and true or false)
+	local padX = inset + gapX
+	local padY = inset + gapY
+	local height = math.floor(font + padY * 2 + 0.5)
+	if height < 1 then
+		height = 1
+	end
+	return rim, padX, height
+end
+
+-- The tooltip slice is clear inside the silver line. A rounded fill that stays
+-- inside the curve leaves the bars showing on the straight edges. The first
+-- return is how far the edge fill reaches. The second is the corner inset.
+-- Square corners already tuck under the line, so both values match that inset.
+function DiveBar.XPBadgeFillInset(line, rounded)
+	local rim = tonumber(line) or 0
+	if rim < 0 then
+		rim = 0
+	end
+	if not rounded then
+		local inset = DiveBar.ContentInset(rim, false)
+		return inset, inset
+	end
+	local silver = rim * DiveBar.BORDER_SHADOW
+	local corner = DiveBar.ContentInset(rim, true)
+	if corner < silver then
+		corner = silver
+	end
+	return silver, corner
 end
 
 -- The right edge sits on the end of the blue fill. When the fill is narrower

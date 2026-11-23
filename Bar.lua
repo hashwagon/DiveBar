@@ -30,6 +30,25 @@ local function Tint(texture, color)
 	texture:SetVertexColor(color[1], color[2], color[3], color[4] or 1)
 end
 
+-- A left-to-right alpha ramp: transparent on the left, `color` at `alpha` on the
+-- right. Used for the badge marker's glow, which only ever bleeds to the left.
+local function HGlow(texture, color, alpha)
+	local r, g, b = color[1], color[2], color[3]
+	texture:SetTexture("Interface\\Buttons\\WHITE8X8")
+	texture:SetVertexColor(1, 1, 1, 1)
+	if texture.SetGradient and type(CreateColor) == "function" then
+		if pcall(texture.SetGradient, texture, "HORIZONTAL", CreateColor(r, g, b, 0), CreateColor(r, g, b, alpha)) then
+			return
+		end
+	end
+	if texture.SetGradientAlpha then
+		if pcall(texture.SetGradientAlpha, texture, "HORIZONTAL", r, g, b, 0, r, g, b, alpha) then
+			return
+		end
+	end
+	texture:SetVertexColor(r, g, b, alpha * 0.6)
+end
+
 local function UseSpark(texture)
 	texture:SetTexture("Interface\\CastingBar\\UI-CastingBar-Spark")
 	texture:SetBlendMode("ADD")
@@ -91,19 +110,23 @@ local function MakeBorder(bar)
 	bar.border = holder
 end
 
-local function PlaceBorder(bar, thickness, rounded)
+local function PlaceBorder(bar, thickness, rounded, fixed)
 	local holder = bar.border
 	local t = thickness
 	if t < 1 then
 		t = 1
 	end
-	local w = bar:GetWidth() or 0
-	local h = bar:GetHeight() or 0
-	if w > 2 and t * 2 > w then
-		t = w / 2
-	end
-	if h > 2 and t * 2 > h then
-		t = h / 2
+	-- The frame border yields when the frame is smaller than the line.
+	-- The badge keeps the frame's line, so a short badge does not thin it.
+	if not fixed then
+		local w = bar:GetWidth() or 0
+		local h = bar:GetHeight() or 0
+		if w > 2 and t * 2 > w then
+			t = w / 2
+		end
+		if h > 2 and t * 2 > h then
+			t = h / 2
+		end
 	end
 	holder:ClearAllPoints()
 	holder:SetAllPoints(bar)
@@ -161,6 +184,66 @@ local function PlaceBorder(bar, thickness, rounded)
 	holder:Show()
 end
 
+local BADGE_FILL = { 0.11, 0.11, 0.11, 0.95 }
+
+-- The straight edges of the tooltip line are clear inside the silver. A single
+-- inset deep enough for the rounded corner leaves the bars showing there.
+-- The center stays inside the curve. Four strips close the clear band on the edges.
+local function PlaceBadgeFill(badge, rim, rounded)
+	local silver, corner = DiveBar.XPBadgeFillInset(rim, rounded)
+	local fill = badge.fill
+	fill:ClearAllPoints()
+	local w = badge:GetWidth() or 0
+	local h = badge:GetHeight() or 0
+	local limit = 0
+	if w > 0 and h > 0 then
+		limit = math.min(w, h) * 0.5
+	end
+	if silver > limit then
+		silver = limit
+	end
+	if corner > limit then
+		corner = limit
+	end
+	local strips = rounded and corner > silver + 0.01 and w > corner * 2 and h > corner * 2
+	if not strips then
+		fill:SetPoint("TOPLEFT", badge, "TOPLEFT", silver, -silver)
+		fill:SetPoint("BOTTOMRIGHT", badge, "BOTTOMRIGHT", -silver, silver)
+		if badge.edge then
+			for i = 1, 4 do
+				badge.edge[i]:Hide()
+			end
+		end
+		return
+	end
+	fill:SetPoint("TOPLEFT", badge, "TOPLEFT", corner, -corner)
+	fill:SetPoint("BOTTOMRIGHT", badge, "BOTTOMRIGHT", -corner, corner)
+	if not badge.edge then
+		badge.edge = {}
+		for i = 1, 4 do
+			local tex = Solid(badge, "BACKGROUND", 0)
+			Color(tex, BADGE_FILL)
+			badge.edge[i] = tex
+		end
+	end
+	local top, bottom, left, right = badge.edge[1], badge.edge[2], badge.edge[3], badge.edge[4]
+	top:ClearAllPoints()
+	top:SetPoint("TOPLEFT", badge, "TOPLEFT", corner, -silver)
+	top:SetPoint("BOTTOMRIGHT", badge, "TOPRIGHT", -corner, -corner)
+	bottom:ClearAllPoints()
+	bottom:SetPoint("BOTTOMLEFT", badge, "BOTTOMLEFT", corner, silver)
+	bottom:SetPoint("TOPRIGHT", badge, "BOTTOMRIGHT", -corner, corner)
+	left:ClearAllPoints()
+	left:SetPoint("TOPLEFT", badge, "TOPLEFT", silver, -corner)
+	left:SetPoint("BOTTOMRIGHT", badge, "BOTTOMLEFT", corner, corner)
+	right:ClearAllPoints()
+	right:SetPoint("TOPLEFT", badge, "TOPRIGHT", -corner, -corner)
+	right:SetPoint("BOTTOMRIGHT", badge, "BOTTOMRIGHT", -silver, corner)
+	for i = 1, 4 do
+		badge.edge[i]:Show()
+	end
+end
+
 local function MakeRow(parent)
 	local row = CreateFrame("Frame", nil, parent)
 	row.bg = Solid(row, "BACKGROUND", 0)
@@ -200,7 +283,14 @@ local function MakeBadge(row)
 	local badge = CreateFrame("Frame", nil, row)
 	badge:EnableMouse(false)
 	badge.fill = Solid(badge, "BACKGROUND", 0)
-	Color(badge.fill, { 0.11, 0.11, 0.11, 0.95 })
+	Color(badge.fill, BADGE_FILL)
+	-- The edge marker: a thin XP-blue line just inside the silver rim on the
+	-- edge that marks the fill. It sits above the fill and under the rim and text.
+	-- Its glow only ever bleeds to the left, toward the completed XP.
+	badge.markGlow = Solid(badge, "ARTWORK", 1)
+	badge.markGlow:Hide()
+	badge.mark = Solid(badge, "ARTWORK", 2)
+	badge.mark:Hide()
 	MakeBorder(badge)
 	-- The rim draws on its own frame above the fill, so the number goes one level higher still.
 	badge.top = CreateFrame("Frame", nil, badge)
@@ -926,6 +1016,7 @@ function DiveBar:PaintLevelTime(bar, row, text, filled, troughW, profile, theme,
 	end
 	local style = profile.xpLevelTime
 	local size = profile.xpLevelTimeSize or 10
+	local textSize = profile.xpBadgeTextSize or size
 	if not text or style == "off" then
 		badge:Hide()
 		label:Hide()
@@ -934,7 +1025,7 @@ function DiveBar:PaintLevelTime(bar, row, text, filled, troughW, profile, theme,
 	if style == "text" then
 		badge:Hide()
 		row.levelOverlay:SetFrameLevel(level)
-		SetLevelText(label, text, size, "OUTLINE")
+		SetLevelText(label, text, textSize, "OUTLINE")
 		local pad = 3
 		local width = math.ceil(label:GetStringWidth() or 0) + pad * 2
 		label:ClearAllPoints()
@@ -943,26 +1034,76 @@ function DiveBar:PaintLevelTime(bar, row, text, filled, troughW, profile, theme,
 		return
 	end
 	label:Hide()
-	local font, rim, padX, height = self.XPBadgeSize(size, bar._fitRim or theme.rim)
-	SetLevelText(badge.label, text, font, "")
-	local width = math.ceil(badge.label:GetStringWidth() or 0) + padX * 2
-	local badgeLevel = (bar:GetFrameLevel() or 0) + 21
 	local rounded = profile.roundedCorners ~= false
+	local rim, padX, height = self.XPBadgeLayout(textSize, size, bar._fitRim or theme.rim, rounded)
+	SetLevelText(badge.label, self.XPBadgeSample(profile.xpBadgeFormat), textSize, "")
+	local contentW = badge.label:GetStringWidth() or 0
+	SetLevelText(badge.label, text, textSize, "")
+	local textW = badge.label:GetStringWidth() or 0
+	if textW > contentW then
+		contentW = textW
+	end
+	local width = math.ceil(contentW + padX * 2)
+	if width < 1 then
+		width = 1
+	end
+	local badgeLevel = (bar:GetFrameLevel() or 0) + 21
 	badge:SetFrameLevel(badgeLevel)
 	badge:SetSize(width, height)
 	badge:ClearAllPoints()
-	badge:SetPoint("LEFT", row.trough, "LEFT", self.XPBadgeOffset(filled, width, troughW, rim * self.BORDER_SHADOW), 0)
-	local inset = self.ContentInset(rim, rounded)
-	badge.fill:ClearAllPoints()
-	badge.fill:SetPoint("TOPLEFT", badge, "TOPLEFT", inset, -inset)
-	badge.fill:SetPoint("BOTTOMRIGHT", badge, "BOTTOMRIGHT", -inset, inset)
-	PlaceBorder(badge, rim, rounded)
+	local shadow = rim * self.BORDER_SHADOW
+	local offset = self.XPBadgeOffset(filled, width, troughW, shadow)
+	badge:SetPoint("LEFT", row.trough, "LEFT", offset, 0)
+	PlaceBadgeFill(badge, rim, rounded)
+	PlaceBorder(badge, rim, rounded, true)
 	local shade = theme.flatBorder and 0.7 or 0.85
 	local holder = badge.border
 	local parts = { holder.tl, holder.tr, holder.bl, holder.br, holder.top, holder.bottom, holder.left, holder.right }
 	for i = 1, #parts do
 		parts[i]:SetVertexColor(shade, shade, shade, 1)
 	end
+	-- Whichever rim edge lands on the end of the blue fill is the measuring edge.
+	local rightMark = offset + width - shadow
+	local leftMark = offset + shadow
+	local markRight = math.abs(rightMark - filled) <= math.abs(leftMark - filled)
+	local silver, corner = self.XPBadgeFillInset(rim, rounded)
+	-- Keep the marker clear of the rounded corners without inverting on a short badge.
+	local halfH = height / 2
+	if corner > halfH - 0.5 then
+		corner = math.max(0, halfH - 0.5)
+	end
+	local markW = math.max(1, rim * 0.3)
+	local mark = badge.mark
+	Color(mark, self.XP_BADGE_MARK_COLOR)
+	mark:SetWidth(markW)
+	mark:ClearAllPoints()
+	-- The glow bleeds left from the marker. On the right edge it stays inside
+	-- the fill, short of the digits; on the left edge it runs out over the XP.
+	local glow = badge.markGlow
+	HGlow(glow, self.XP_BADGE_MARK_COLOR, 0.5)
+	glow:ClearAllPoints()
+	local reach = math.max(3, height * 0.6)
+	if markRight then
+		local clearance = (width - contentW) / 2 - silver
+		if clearance < 1 then
+			clearance = 1
+		end
+		if reach > clearance then
+			reach = clearance
+		end
+		mark:SetPoint("TOPRIGHT", badge, "TOPRIGHT", -silver, -corner)
+		mark:SetPoint("BOTTOMRIGHT", badge, "BOTTOMRIGHT", -silver, corner)
+		glow:SetPoint("TOPRIGHT", badge, "TOPRIGHT", -(silver + markW), -corner)
+		glow:SetPoint("BOTTOMRIGHT", badge, "BOTTOMRIGHT", -(silver + markW), corner)
+	else
+		mark:SetPoint("TOPLEFT", badge, "TOPLEFT", silver, -corner)
+		mark:SetPoint("BOTTOMLEFT", badge, "BOTTOMLEFT", silver, corner)
+		glow:SetPoint("TOPRIGHT", badge, "TOPLEFT", silver, -corner)
+		glow:SetPoint("BOTTOMRIGHT", badge, "BOTTOMLEFT", silver, corner)
+	end
+	glow:SetWidth(reach)
+	glow:Show()
+	mark:Show()
 	badge.top:SetFrameLevel(badgeLevel + 21)
 	badge:Show()
 end
@@ -1120,7 +1261,9 @@ function DiveBar:Refresh()
 		if previewWidth > limit then
 			previewWidth = limit
 		end
-		self:Present(self.preview, self:SampleState(), { width = previewWidth, preview = true })
+		local sample = self:SampleState()
+		self:Present(self.preview, sample, { width = previewWidth, preview = true })
+		self.previewEmpty = not (sample.showCast or #sample.swings > 0 or #sample.timers > 0 or sample.xp)
 		if self.FitPreview then
 			self:FitPreview()
 		end

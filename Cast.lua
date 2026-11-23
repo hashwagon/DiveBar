@@ -167,28 +167,36 @@ function DiveBar:PreviewIcon()
 	return self.previewIcon
 end
 
+-- The preview tick boxes last for the session. A bar that is turned off never previews.
+DiveBar.previewShow = DiveBar.previewShow or {}
+
+function DiveBar:PreviewShows(feature)
+	return self.profile[feature] and self.previewShow[feature] ~= false
+end
+
 function DiveBar:SampleState()
 	local profile = self.profile
 	local swings = {}
 	local progress = {}
-	if profile.swings and profile.swingMelee then
+	local showSwings = self:PreviewShows("swings")
+	if showSwings and profile.swingMelee then
 		swings[#swings + 1] = "melee"
 		progress.melee = 0.46
-	elseif profile.swings and profile.swingRanged then
+	elseif showSwings and profile.swingRanged then
 		swings[#swings + 1] = "shot"
 		progress.shot = 0.62
 	end
 	local timers = {}
 	local timerProgress = {}
 	local timerMeta = {}
-	if profile.timers then
+	if self:PreviewShows("timers") then
 		timers[1] = "BREATH"
 		timerProgress.BREATH = 0.72
 		timerMeta.BREATH = { label = "Breath", value = 21.6, max = 30 }
 	end
 	local xp
 	local xpBadge
-	if profile.xp then
+	if self:PreviewShows("xp") then
 		xp = { value = 0.44, rested = 0.26 }
 		if profile.showQuestXP ~= false then
 			xp.quest = 0.12
@@ -198,7 +206,7 @@ function DiveBar:SampleState()
 		end
 	end
 	local duration = 3
-	local showCast = profile.cast and true or false
+	local showCast = self:PreviewShows("cast") and true or false
 	return {
 		mode = showCast and "cast" or "idle",
 		name = "Frostbolt",
