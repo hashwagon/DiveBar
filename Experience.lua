@@ -214,23 +214,19 @@ function DiveBar.FormatLevelTime(seconds, style)
 	return string.format("%dd", math.floor(seconds / 86400 + 0.5))
 end
 
--- The badge covers the whole experience strip: the bar, its padding, and the frame
--- edge it touches. Its rim is the frame's line, thinned so a short strip keeps room for the number.
--- Under 9 px there is no room at all.
-function DiveBar.XPBadgeSize(stripH, size, frameLine)
-	stripH = tonumber(stripH) or 0
-	if stripH < 9 then
-		return nil
-	end
-	local rim = math.min(tonumber(frameLine) or 2, stripH * 0.25)
-	if rim < 2 then
-		rim = 2
-	end
-	local font = math.min(tonumber(size) or 10, stripH - 4)
+-- The Size setting scales the whole badge. It is centered on the strip and may
+-- reach past the frame. Its rim is the frame's line, thinned so a small badge keeps room for the number.
+-- Returns font, rim, horizontal padding, height.
+function DiveBar.XPBadgeSize(size, frameLine)
+	local font = tonumber(size) or 10
 	if font < 4 then
 		font = 4
 	end
-	return font, rim, math.max(rim + 2, math.floor(font * 0.5 + 0.5))
+	local rim = math.min(tonumber(frameLine) or 2, font * 0.5)
+	if rim < 2 then
+		rim = 2
+	end
+	return font, rim, math.max(rim + 2, math.floor(font * 0.5 + 0.5)), math.floor(font + rim * 2 + 4 + 0.5)
 end
 
 -- The right edge sits on the end of the blue fill. When the fill is narrower

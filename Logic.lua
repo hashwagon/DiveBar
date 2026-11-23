@@ -41,13 +41,13 @@ local FEATURE_SET = {
 -- Blizzard bars default off. Dive Bar draws its own.
 DiveBar.DEFAULTS = {
 	theme = "Classic",
-	width = 466,
+	width = 461,
 	scale = 1,
 	opacity = 1,
 	textSize = 10,
 	lock = false,
-	border = 5,
-	margin = 5,
+	border = 4,
+	margin = 2,
 	roundedCorners = true,
 	order = { "cast", "timers", "swings", "xp" },
 	anchor = "xp",
@@ -59,17 +59,17 @@ DiveBar.DEFAULTS = {
 	showTime = true,
 	showLatency = true,
 	castHeight = 16,
-	castPadding = 3,
+	castPadding = 1,
 	timers = true,
 	blizzTimers = false,
 	timerHeight = 12,
-	timerPadding = 3,
+	timerPadding = 1,
 	swings = true,
 	blizzSwings = false,
 	swingMelee = true,
 	swingRanged = true,
-	swingHeight = 7,
-	swingPadding = 3,
+	swingHeight = 5,
+	swingPadding = 1,
 	consolidate = true,
 	xp = true,
 	blizzXp = false,
@@ -77,9 +77,9 @@ DiveBar.DEFAULTS = {
 	showXPRate = true,
 	xpLevelTime = "badge",
 	xpBadgeFormat = "decimal",
-	xpLevelTimeSize = 10,
-	xpHeight = 10,
-	xpPadding = 3,
+	xpLevelTimeSize = 7,
+	xpHeight = 6,
+	xpPadding = 0,
 	colors = {
 		melee = { 1, 0.74, 0.35 },
 		off = { 0.86, 0.55, 0.26 },
@@ -608,22 +608,6 @@ function DiveBar.FeaturePadding(profile, feature)
 		value = 0
 	end
 	return value
-end
-
--- Every trough is the Width setting wide, so the left and right padding is the
--- largest padding of any enabled bar. Rows appearing do not change the frame width.
-function DiveBar.SidePadding(profile)
-	local side = 0
-	for i = 1, #DiveBar.FEATURE_LIST do
-		local feature = DiveBar.FEATURE_LIST[i]
-		if profile[feature] then
-			local pad = DiveBar.FeaturePadding(profile, feature)
-			if pad > side then
-				side = pad
-			end
-		end
-	end
-	return side
 end
 
 -- spec.cast, spec.xp, spec.swings, spec.timers. Order is top to bottom.

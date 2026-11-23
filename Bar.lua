@@ -544,10 +544,9 @@ function DiveBar:ResolveChrome(contentH, theme)
 	return DiveBar.FitChrome(contentH, theme.borderSize, theme.rim, self.profile.roundedCorners ~= false)
 end
 
--- What the frame adds on each side of the Width setting: the border inset,
--- the background margin, and the widest bar padding.
+-- What the frame adds on each side of the Width setting: the border inset.
 function DiveBar:ChromeSide(profile, theme)
-	return DiveBar.ContentInset(theme.rim, profile.roundedCorners ~= false) + (profile.margin or 0) + DiveBar.SidePadding(profile)
+	return DiveBar.ContentInset(theme.rim, profile.roundedCorners ~= false)
 end
 
 function DiveBar:BlockRow(bar, block)
@@ -616,10 +615,10 @@ function DiveBar:Place(bar, state, theme, profile, width)
 	end
 	local line, inset, frameH = self:ResolveChrome(contentH, theme)
 	bar._fitRim = line
-	local side = self.SidePadding(profile)
 	-- The chrome hugs whatever is actually on screen. The background starts
 	-- under the border line, and the rounded corner covers its square corners.
-	bar:SetSize(width + (inset + margin + side) * 2, frameH)
+	-- Margin and padding are vertical only, so the bars run into the side border.
+	bar:SetSize(width + inset * 2, frameH)
 	bar.inner:ClearAllPoints()
 	bar.inner:SetPoint("TOPLEFT", bar, "TOPLEFT", inset, -inset)
 	bar.inner:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", -inset, inset)
@@ -639,19 +638,15 @@ function DiveBar:Place(bar, state, theme, profile, width)
 		local row = self:BlockRow(bar, block)
 		row:Show()
 		row:ClearAllPoints()
-		row:SetPoint("TOPLEFT", bar.inner, "TOPLEFT", margin, -top)
-		row:SetPoint("TOPRIGHT", bar.inner, "TOPRIGHT", -margin, -top)
+		row:SetPoint("TOPLEFT", bar.inner, "TOPLEFT", 0, -top)
+		row:SetPoint("TOPRIGHT", bar.inner, "TOPRIGHT", 0, -top)
 		row:SetHeight(block.h)
-		if block.kind == "xp" then
-			row.stripH = block.h
-			row.stripEdge = inset + margin
-		end
 		if block.kind == "cast" then
-			self:PlaceCastRow(bar, state, theme, block, side)
+			self:PlaceCastRow(bar, state, theme, block)
 		else
 			row.trough:ClearAllPoints()
-			row.trough:SetPoint("TOPLEFT", row, "TOPLEFT", side, -block.pad)
-			row.trough:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -side, block.pad)
+			row.trough:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -block.pad)
+			row.trough:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 0, block.pad)
 		end
 		top = top + block.h
 	end
@@ -659,17 +654,17 @@ function DiveBar:Place(bar, state, theme, profile, width)
 	self:ApplyEdge(bar, theme)
 end
 
-function DiveBar:PlaceCastRow(bar, state, theme, block, side)
+function DiveBar:PlaceCastRow(bar, state, theme, block)
 	local cast = bar.cast
 	local pad = block.pad
 	local showIcon = state.showIcon and state.icon and state.mode ~= "idle"
 	cast.icon:SetShown(showIcon and true or false)
 	cast.trough:ClearAllPoints()
-	cast.trough:SetPoint("TOPRIGHT", cast, "TOPRIGHT", -side, -pad)
-	cast.trough:SetPoint("BOTTOMRIGHT", cast, "BOTTOMRIGHT", -side, pad)
+	cast.trough:SetPoint("TOPRIGHT", cast, "TOPRIGHT", 0, -pad)
+	cast.trough:SetPoint("BOTTOMRIGHT", cast, "BOTTOMRIGHT", 0, pad)
 	if showIcon then
 		cast.icon:ClearAllPoints()
-		cast.icon:SetPoint("LEFT", cast, "LEFT", side, 0)
+		cast.icon:SetPoint("LEFT", cast, "LEFT", 0, 0)
 		cast.icon:SetSize(block.barH, block.barH)
 		cast.trough:SetPoint("TOPLEFT", cast.icon, "TOPRIGHT", theme.gap, 0)
 		if state.icon then
@@ -685,7 +680,7 @@ function DiveBar:PlaceCastRow(bar, state, theme, block, side)
 			cast.iconTex:SetVertexColor(1, 1, 1)
 		end
 	else
-		cast.trough:SetPoint("TOPLEFT", cast, "TOPLEFT", side, -pad)
+		cast.trough:SetPoint("TOPLEFT", cast, "TOPLEFT", 0, -pad)
 	end
 end
 
@@ -948,14 +943,7 @@ function DiveBar:PaintLevelTime(bar, row, text, filled, troughW, profile, theme,
 		return
 	end
 	label:Hide()
-	-- One size wherever the bar sits: the strip plus a frame edge above and below, centered
-	-- on the bar. Alone it covers the frame edge; between bars it reaches into their padding.
-	local height = (row.stripH or 0) + (row.stripEdge or 0) * 2
-	local font, rim, padX = self.XPBadgeSize(height, size, bar._fitRim or theme.rim)
-	if not font then
-		badge:Hide()
-		return
-	end
+	local font, rim, padX, height = self.XPBadgeSize(size, bar._fitRim or theme.rim)
 	SetLevelText(badge.label, text, font, "")
 	local width = math.ceil(badge.label:GetStringWidth() or 0) + padX * 2
 	local badgeLevel = (bar:GetFrameLevel() or 0) + 21

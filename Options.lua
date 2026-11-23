@@ -1231,7 +1231,7 @@ function DiveBar:BuildOptionSections(body)
 	levelSize:SetPoint("TOPLEFT", 8, y)
 	self.xpLevelTimeSize = levelSize
 	y = y - 58
-	local levelNote = Cream(xpHost, "Ends where your experience ends. Shows an infinity sign until you earn experience this session. The badge is as tall as the experience strip, so its text stops growing at that height.")
+	local levelNote = Cream(xpHost, "Ends where your experience ends. Shows an infinity sign until you earn experience this session. Size scales the whole badge.")
 	levelNote:SetPoint("TOPLEFT", 8, y)
 	levelNote:SetWidth(560)
 	self.xpLevelTimeNote = levelNote
