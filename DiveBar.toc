@@ -2,6 +2,7 @@
 ## Title: Dive Bar
 ## Notes: Player cast bar, timer bars, swing timers, and an experience line.
 ## Version: 1.2.0
+## X-License: GPL-3.0-or-later
 ## SavedVariables: DiveBarDB
 ## IconTexture: Interface\Icons\Spell_Frost_FrostBolt02
 

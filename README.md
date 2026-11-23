@@ -44,3 +44,7 @@ There is an older copy at `_classic_era_/Interface/AddOns/DiveBar`. It is not de
 | `Blizzard.lua` | Hiding the default Blizzard bars |
 | `Minimap.lua` | Minimap button |
 | `Options.lua` | Options window |
+
+## License
+
+Dive Bar is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. See [`LICENSE`](LICENSE).
