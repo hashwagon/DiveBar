@@ -1,35 +1,70 @@
 # Dive Bar
 
-A World of Warcraft addon: one player frame with a cast bar, breath/fatigue/Feign Death timers, swing timers, and an experience line with a time-to-level badge.
+A World of Warcraft addon that puts your cast bar, breath, fatigue, and Feign Death timers, swing timers, and an experience line into one player frame.
 
-The repo root is the addon folder. `DiveBar.toc` lists the load order.
+Dive Bar is built for and tested on **WoW Forever**. The code also supports Classic Era, but Era gets far less testing.
 
-## Live deploys and testing: WoW Forever
+## Features
 
-The live copy is the **Forever** client:
+- **Cast bar** with optional spell icon, spell name, cast time, and latency.
+- **Timer bars** for breath, fatigue, and Feign Death.
+- **Swing timers** for melee and for ranged or wand attacks, with an optional single-weapon timer.
+- **Experience line** showing rested XP and completed-quest XP, plus a time-to-level badge. XP per hour can appear in the tooltip.
+- **Themes:** Forever, Flat, and Classic, with optional rounded corners.
+- **Blizzard bars:** each default Blizzard bar can be turned on or off through your active Edit Mode layout.
+- **Profiles:** each character can use its own profile, or several characters can share one.
+- A minimap button and an options window.
 
-```
-~/Games/battlenet/drive_c/Program Files (x86)/World of Warcraft/_forever_/Interface/AddOns/DiveBar
-```
+## Installation
 
-Edit here, then deploy:
+### CurseForge
+
+Install with the CurseForge app (coming soon).
+
+### Manual
+
+1. Download the latest `DiveBar-*.zip` from [Releases](https://github.com/hashwagon/DiveBar/releases).
+2. Extract it into the Forever client's AddOns folder so that you end up with `AddOns/DiveBar/DiveBar.toc`:
+   - Windows: `C:\Program Files (x86)\World of Warcraft\_forever_\Interface\AddOns`
+   - macOS: `/Applications/World of Warcraft/_forever_/Interface/AddOns`
+3. Restart the game, or type `/reload` if you're already in game.
+
+## Usage
+
+Type `/divebar`, or click the minimap button, to open the options.
+
+| Command | Effect |
+| --- | --- |
+| `/divebar` | Open or close the options window |
+| `/divebar lock` / `unlock` | Lock or unlock the frame for moving |
+| `/divebar reset` | Reset the current profile to its defaults |
+| `/divebar minimap` | Show or hide the minimap button |
+| `/divebar profile <name>` | Switch to a profile, creating it if it doesn't exist |
+| `/divebar xpreset` | Reset the experience session (XP per hour, time to level) |
+
+Settings are saved per account in `WTF/Account/<account>/SavedVariables/DiveBar.lua`.
+
+## Development
+
+The repository root is the addon folder. `DiveBar.toc` lists the load order.
+
+To test changes, put a copy of the repository in your client's `Interface/AddOns/DiveBar`, either by copying the files or by symlinking the folder. Then `/reload` in game. Type `/console scriptErrors 1` to see Lua errors.
+
+The included `deploy.sh` copies only the addon files (`.lua`, `.toc`, `.tga`, `.blp`) and needs `bash` and `rsync`. That means macOS, Linux, or WSL on Windows. Tell it where your AddOns folder is in either of these ways:
+
+- Set the `DIVEBAR_DEST` environment variable.
+- Put the path on one line in a `.deploy-dest` file at the repository root. Git ignores this file.
 
 ```bash
-./deploy.sh            # copy .lua/.toc (and any .tga/.blp) to the Forever AddOns folder
+./deploy.sh            # sync into the AddOns folder
 ./deploy.sh --dry-run  # show what would change
 ```
 
-`deploy.sh` mirrors with `rsync --delete`, so files removed here are removed from the live folder too. Set `DIVEBAR_DEST` to deploy somewhere else.
+`deploy.sh` mirrors with `rsync --delete`, so removing a file from the repository also removes it from the AddOns folder.
 
-In game, `/reload` picks up the changes. `/divebar` or the minimap button opens the options. Turn on `/console scriptErrors 1` to see Lua errors.
+WoW runs Lua 5.1. Check syntax with `luac5.1 -p *.lua`; any `luac` catches most syntax errors.
 
-Settings live in the `DiveBarDB` saved variable under `_forever_/WTF/Account/<account>/SavedVariables/DiveBar.lua`. Deploying does not touch them.
-
-## Classic Era copy
-
-There is an older copy at `_classic_era_/Interface/AddOns/DiveBar`. It is not deployed from here and lacks recent work (the time-to-level badge, XP per hour, the rounded-corner and swing texture fixes). The code still supports Era (`## Interface: 16001, 11509`; Era uses the combat log where Forever has `PLAYER_SWING`), but test on Forever first.
-
-## Files
+### Files
 
 | File | Purpose |
 | --- | --- |
@@ -44,6 +79,21 @@ There is an older copy at `_classic_era_/Interface/AddOns/DiveBar`. It is not de
 | `Blizzard.lua` | Hiding the default Blizzard bars |
 | `Minimap.lua` | Minimap button |
 | `Options.lua` | Options window |
+
+### Releasing
+
+Releases are built by the [BigWigs packager](https://github.com/BigWigsMods/packager) in GitHub Actions (`.github/workflows/release.yml`).
+
+- **Every push and pull request:** the workflow checks syntax and builds a test zip. The zip is attached to the workflow run as an artifact and isn't published.
+- **A pushed `v*` tag:** the workflow publishes the zip to GitHub Releases and to any site with a token configured (CurseForge, Wago).
+
+To make a release:
+
+1. Set `## Version:` in `DiveBar.toc`, and add a section to `CHANGELOG.md`.
+2. Commit, then tag with the same version, for example `git tag -a v1.3.0 -m "Dive Bar 1.3.0"`.
+3. Push the tag with `git push origin v1.3.0`.
+
+The tag must match the `.toc` version, or have a suffix after it: `v1.3.0-beta1` is allowed with a `.toc` version of `1.3.0`. Tags containing `alpha` or `beta` publish as test builds rather than releases.
 
 ## License
 

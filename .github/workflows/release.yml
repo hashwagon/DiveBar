@@ -1,0 +1,58 @@
+name: Package
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Lua 5.1
+        run: sudo apt-get update -q && sudo apt-get install -y -q lua5.1
+
+      - name: Check syntax
+        run: luac5.1 -p *.lua
+
+      - name: Check tag matches .toc version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          toc="$(sed -n 's/^## Version: *//p' DiveBar.toc | tr -d '\r')"
+          tag="${GITHUB_REF_NAME#v}"
+          case "$tag" in
+            "$toc" | "$toc"-*) echo "Tag $GITHUB_REF_NAME matches .toc version $toc" ;;
+            *) echo "::error::Tag $GITHUB_REF_NAME does not match .toc version $toc"; exit 1 ;;
+          esac
+
+  package:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}
+      WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
+      GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Build test zip
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: BigWigsMods/packager@v2
+        with:
+          args: -d
+
+      - name: Package and publish
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: BigWigsMods/packager@v2
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: DiveBar
+          path: .release/*.zip
