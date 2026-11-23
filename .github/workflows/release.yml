@@ -56,3 +56,4 @@ jobs:
         with:
           name: DiveBar
           path: .release/*.zip
+          include-hidden-files: true
