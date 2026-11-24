@@ -182,6 +182,86 @@ local function PlaceBorder(bar, thickness, rounded, fixed)
 		holder.right:SetWidth(t)
 	end
 	holder:Show()
+	return t
+end
+
+local CORNER_TEX = "Interface\\AddOns\\DiveBar\\DiveBarCorner"
+
+local function Unsnap(texture)
+	if texture.SetSnapToPixelGrid then
+		texture:SetSnapToPixelGrid(false)
+	end
+	if texture.SetTexelSnappingBias then
+		texture:SetTexelSnappingBias(0)
+	end
+end
+
+-- The background follows the border's silver line. The pieces never overlap,
+-- so a see-through background stays even.
+local function MakeBackground(bar)
+	local bg = {}
+	local function piece(texture)
+		local tex = bar:CreateTexture(nil, "BACKGROUND", nil, 0)
+		tex:SetTexture(texture or "Interface\\Buttons\\WHITE8X8")
+		Unsnap(tex)
+		return tex
+	end
+	bg.mid = piece()
+	bg.top = piece()
+	bg.bottom = piece()
+	bg.tl = piece(CORNER_TEX)
+	bg.tr = piece(CORNER_TEX)
+	bg.bl = piece(CORNER_TEX)
+	bg.br = piece(CORNER_TEX)
+	bg.tl:SetTexCoord(0, 1, 0, 1)
+	bg.tr:SetTexCoord(1, 0, 0, 1)
+	bg.bl:SetTexCoord(0, 1, 1, 0)
+	bg.br:SetTexCoord(1, 0, 1, 0)
+	bg.all = { bg.mid, bg.top, bg.bottom, bg.tl, bg.tr, bg.bl, bg.br }
+	bar.bg = bg
+end
+
+local function PlaceBackground(bar, t, rounded, color)
+	local bg = bar.bg
+	local r, g, b, a = color[1], color[2], color[3], color[4] or 1
+	for i = 1, #bg.all do
+		bg.all[i]:SetVertexColor(r, g, b, a)
+	end
+	local edge = t * DiveBar.BORDER_SILVER
+	local mid = bg.mid
+	mid:ClearAllPoints()
+	if not rounded then
+		mid:SetPoint("TOPLEFT", bar, "TOPLEFT", edge, -edge)
+		mid:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", -edge, edge)
+		mid:Show()
+		for i = 2, #bg.all do
+			bg.all[i]:Hide()
+		end
+		return
+	end
+	local w = bar:GetWidth() or 0
+	local h = bar:GetHeight() or 0
+	local radius = t - edge
+	mid:SetPoint("TOPLEFT", bar, "TOPLEFT", edge, -t)
+	mid:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", -edge, t)
+	mid:SetShown(h > t * 2 + 0.01)
+	bg.top:ClearAllPoints()
+	bg.top:SetPoint("TOPLEFT", bar, "TOPLEFT", t, -edge)
+	bg.top:SetPoint("BOTTOMRIGHT", bar, "TOPRIGHT", -t, -t)
+	bg.bottom:ClearAllPoints()
+	bg.bottom:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", t, edge)
+	bg.bottom:SetPoint("TOPRIGHT", bar, "BOTTOMRIGHT", -t, t)
+	local strips = w > t * 2 + 0.01
+	bg.top:SetShown(strips)
+	bg.bottom:SetShown(strips)
+	local corners = { { bg.tl, "TOPLEFT", 1, -1 }, { bg.tr, "TOPRIGHT", -1, -1 }, { bg.bl, "BOTTOMLEFT", 1, 1 }, { bg.br, "BOTTOMRIGHT", -1, 1 } }
+	for i = 1, #corners do
+		local tex, point, dx, dy = corners[i][1], corners[i][2], corners[i][3], corners[i][4]
+		tex:ClearAllPoints()
+		tex:SetPoint(point, bar, point, edge * dx, edge * dy)
+		tex:SetSize(radius, radius)
+		tex:Show()
+	end
 end
 
 local BADGE_FILL = { 0.11, 0.11, 0.11, 0.95 }
@@ -473,8 +553,7 @@ function DiveBar:BuildBar(globalName, parent, interactive)
 
 	bar.inner = CreateFrame("Frame", nil, bar)
 	bar.inner:EnableMouse(false)
-	bar.innerBG = Solid(bar.inner, "BACKGROUND", 0)
-	bar.innerBG:SetAllPoints()
+	MakeBackground(bar)
 	local edgeOk, edgeFrame = pcall(CreateFrame, "Frame", nil, bar, "BackdropTemplate")
 	if edgeOk and edgeFrame then
 		edgeFrame:SetAllPoints(bar)
@@ -587,7 +666,8 @@ function DiveBar:ApplyEdge(bar, theme)
 	-- short experience frame does not have to shrink every setting to one size.
 	local thickness = bar._fitRim or theme.rim or DiveBar.BorderThickness(theme.borderSize)
 	local rounded = not (self.profile and self.profile.roundedCorners == false)
-	PlaceBorder(bar, thickness, rounded)
+	local line = PlaceBorder(bar, thickness, rounded)
+	PlaceBackground(bar, line, rounded, theme.background or { 0.02, 0.02, 0.02, 0.95 })
 	local r, g, b = 1, 1, 1
 	if theme.flatBorder then
 		r, g, b = 0.7, 0.7, 0.7
@@ -600,8 +680,6 @@ function DiveBar:ApplyEdge(bar, theme)
 end
 
 function DiveBar:ApplyColors(bar, theme)
-	Color(bar.innerBG, theme.background or { 0.02, 0.02, 0.02, 0.95 })
-	bar.innerBG:Show()
 	self:ApplyEdge(bar, theme)
 
 	local function paintRow(row)
@@ -705,8 +783,8 @@ function DiveBar:Place(bar, state, theme, profile, width)
 	end
 	local line, inset, frameH = self:ResolveChrome(contentH, theme)
 	bar._fitRim = line
-	-- The chrome hugs whatever is actually on screen. The background starts
-	-- under the border line, and the rounded corner covers its square corners.
+	-- The chrome hugs whatever is actually on screen. The background reaches
+	-- the middle of the silver line and follows its curve in the corners.
 	-- Margin and padding are vertical only, so the bars run into the side border.
 	bar:SetSize(width + inset * 2, frameH)
 	bar.inner:ClearAllPoints()

@@ -72,7 +72,7 @@ WoW runs Lua 5.1. Check syntax with `luac5.1 -p *.lua`; any `luac` catches most 
 | --- | --- |
 | `Logic.lua` | Pure layout and settings helpers (rows, padding, border math) |
 | `Themes.lua` | Forever, Flat, and Classic themes |
-| `Core.lua` | Saved variables, profiles, slash command |
+| `Core.lua` | Version, saved variables, profiles, slash command |
 | `Bar.lua` | Frame building, placement, painting, border, XP badge |
 | `Cast.lua` | Cast state, event wiring, update loop |
 | `Swings.lua` | Swing timers from gear and swing events |
@@ -81,6 +81,8 @@ WoW runs Lua 5.1. Check syntax with `luac5.1 -p *.lua`; any `luac` catches most 
 | `Blizzard.lua` | Hiding the default Blizzard bars |
 | `Minimap.lua` | Minimap button |
 | `Options.lua` | Options window |
+| `DiveBarMinimap.tga`, `DiveBarPortrait.tga` | Minimap button and options window art |
+| `media/` | CurseForge project art. Not packaged. |
 
 ### Releasing
 
@@ -89,13 +91,29 @@ Releases are built by the [BigWigs packager](https://github.com/BigWigsMods/pack
 - **Every push and pull request:** the workflow checks syntax and builds a test zip. The zip is attached to the workflow run as an artifact and isn't published.
 - **A pushed `v*` tag:** the workflow publishes the zip to GitHub Releases and to any site with a token configured (CurseForge, Wago).
 
+`.pkgmeta` names the package folder, supplies `CHANGELOG.md` as the release notes, and lists the files left out of the zip.
+
 To make a release:
 
-1. Set `## Version:` in `DiveBar.toc`, and add a section to `CHANGELOG.md`.
+1. Set `## Version:` in `DiveBar.toc`, and add a section to `CHANGELOG.md`. The `.toc` is the only place the version is set. The options window reads it from there.
 2. Commit, then tag with the same version, for example `git tag -a v1.3.0 -m "Dive Bar 1.3.0"`.
 3. Push the tag with `git push origin v1.3.0`.
 
 The tag must match the `.toc` version, or have a suffix after it: `v1.3.0-beta1` is allowed with a `.toc` version of `1.3.0`. Tags containing `alpha` or `beta` publish as test builds rather than releases.
+
+#### Publishing targets
+
+The packager uploads to a site only when both its project ID and its token are set. Otherwise it skips that site.
+
+| Site | Project ID in `DiveBar.toc` | Repository secret |
+| --- | --- | --- |
+| GitHub Releases | Not needed | `GITHUB_TOKEN`, provided by Actions |
+| CurseForge | `## X-Curse-Project-ID: 1827145` | `CF_API_KEY`, an API token from your CurseForge account settings |
+| Wago | `## X-Wago-ID:` (not set yet) | `WAGO_API_TOKEN` |
+
+Leave automatic packaging turned off in the CurseForge project's source settings. This workflow already uploads every tagged release, so CurseForge's own packager would add a second copy of the same version.
+
+The packager chooses the CurseForge game versions from `## Interface:`. `16001` becomes 1.60.1 (Forever) and `11509` becomes 1.15.9 (Classic Era). When either interface number changes, check the new file's game versions on CurseForge.
 
 ## License
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.1
+
+- Rounded corners: the background follows the curve of the border and stops under its silver line, so see-through backgrounds no longer show square corners or darker edges.
+- XP badge: new profiles start with larger time text and no extra padding.
+
 ## 1.3.0
 
 - First release on CurseForge.

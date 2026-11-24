@@ -75,8 +75,8 @@ DiveBar.DEFAULTS = {
 	showXPRate = true,
 	xpLevelTime = "badge",
 	xpBadgeFormat = "decimal",
-	xpLevelTimeSize = 2,
-	xpBadgeTextSize = 4,
+	xpLevelTimeSize = 0,
+	xpBadgeTextSize = 6,
 	xpHeight = 6,
 	xpPadding = 0,
 	colors = {
@@ -699,6 +699,10 @@ DiveBar.BORDER_LINE = 6 / 16
 DiveBar.BORDER_INSET = 0.4
 DiveBar.BORDER_INSET_ROUNDED = 5 / 6
 DiveBar.BORDER_SHADOW = 0.6
+-- The silver is texel 3 of the 6, so its middle is 3.5 texels in. The corner
+-- curve keeps that line about 2.5 texels from the corner piece's inner corner.
+-- The background stops on that middle, so the silver hides its edge.
+DiveBar.BORDER_SILVER = 3.5 / 6
 
 function DiveBar.BorderThickness(edge)
 	local thickness = (tonumber(edge) or 0) * DiveBar.BORDER_LINE
