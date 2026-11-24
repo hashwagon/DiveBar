@@ -12,7 +12,7 @@ Dive Bar is built for and tested on **WoW Forever**. The code also supports Clas
 - **Swing timers built in.** Melee and ranged or wand swings each get their own timer, with an optional single-weapon mode. You don't need a separate swing timer addon.
 - **An experience line that does more.** Rested XP and XP from quests you've completed but not turned in are both shown on the line, along with a time-to-level badge. XP per hour can appear in the tooltip.
 - **Every other timer, in the same frame.** Breath, fatigue, and Feign Death appear in Dive Bar when they're running, then get out of the way.
-- **A look that fits your UI.** Choose the Forever, Flat, or Classic theme, with optional rounded corners, and tune the size, padding, and opacity.
+- **A look that fits your UI.** Choose the Forever theme with its bronze rim, Classic in silver, or Flat, and tune the border, size, padding, and opacity.
 - **No doubled-up bars.** Turn each default Blizzard bar on or off through your active Edit Mode layout, so Dive Bar replaces the old bars instead of sitting next to them.
 - **Profiles for your alts.** Give each character its own setup, or share one across all of them.
 - A minimap button and an options window with a live preview of each bar.

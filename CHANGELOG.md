@@ -1,9 +1,13 @@
 # Changelog
 
-## Unreleased
+## 1.4.0
 
 - Until the first lock, the bars play a demo that alternates a mage casting Frostbolt with a warrior swinging a two-hander and weaving in Slam, while experience fills every 20 seconds. Rows fold away between casts and fights as they do in real use. Real casts and swings show instead.
 - Options: Play demo, on the Preview heading, runs the same demo on the bars and in the preview.
+- Borders: the frame and the XP badge wear WoW Forever's window rim, with its chamfered corners. Forever keeps the bronze, Classic turns it silver like the classic cast bar and tooltip borders, and Flat draws a near-black band edged by a crisp one-pixel gray line. All three are the same thickness. On Classic Era, Forever and Classic keep the tooltip line, Forever's tinted bronze.
+- Border: the slider now runs from a 1-pixel hairline to the weight of Forever's own window rims. Saved settings keep their thickness, which now sits higher on the slider. New profiles start thinner.
+- Forever theme: the spell name no longer sits on a blue plate, so the bar's texture shows behind it.
+- Rounded corners only applies to the tooltip line and is dimmed when the border has its own corners.
 
 ## 1.3.1
 

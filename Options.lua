@@ -964,10 +964,11 @@ function DiveBar:BuildOptionSections(body)
 	end
 	local corners = Check(look, "Rounded corners", function(value)
 		DiveBar.profile.roundedCorners = value
-	end)
+	end, "Rounds the tooltip-style border. Metal and Flat borders keep their own corners.")
 	corners:SetPoint("LEFT", minimap.label, "RIGHT", 24, 0)
 	corners.Refresh = function()
 		corners:SetChecked(DiveBar.profile.roundedCorners)
+		corners:SetDimmed(DiveBar:Theme().skin ~= "tooltip")
 	end
 	y = y - 32
 	look:SetHeight(-y + 4)

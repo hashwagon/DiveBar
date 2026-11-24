@@ -237,8 +237,8 @@ function DiveBar.XPBadgeLayout(textSize, padding, frameLine, rounded)
 		extra = 0
 	end
 	local rim = tonumber(frameLine) or 2
-	if rim < 2 then
-		rim = 2
+	if rim < 1 then
+		rim = 1
 	end
 	local gapX = 1 + extra * 0.75
 	local gapY = 0.5 + extra * 0.4

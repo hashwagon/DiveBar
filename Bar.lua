@@ -75,6 +75,174 @@ local function CropBorder(tex, left, right, top, bottom, turn)
 	end
 end
 
+local function CropTooltip(holder)
+	-- Each slice is 16 texels. The line is the outer 6.
+	CropBorder(holder.left, 0, 6, 0, 16, false)
+	CropBorder(holder.right, 26, 32, 0, 16, false)
+	CropBorder(holder.top, 32, 38, 0, 16, true)
+	CropBorder(holder.bottom, 58, 64, 0, 16, true)
+	CropBorder(holder.tl, 64, 70, 0, 6, false)
+	CropBorder(holder.tr, 90, 96, 0, 6, false)
+	CropBorder(holder.bl, 96, 102, 10, 16, false)
+	CropBorder(holder.br, 122, 128, 10, 16, false)
+end
+
+-- WoW Forever draws its window rims from this nine-slice in its own bronze art.
+local METAL_ATLAS = {
+	tl = "UI-Frame-Metal-CornerTopLeft",
+	tr = "UI-Frame-Metal-CornerTopRight",
+	bl = "UI-Frame-Metal-CornerBottomLeft",
+	br = "UI-Frame-Metal-CornerBottomRight",
+	top = "_UI-Frame-Metal-EdgeTop",
+	bottom = "_UI-Frame-Metal-EdgeBottom",
+	left = "!UI-Frame-Metal-EdgeLeft",
+	right = "!UI-Frame-Metal-EdgeRight",
+}
+-- In atlas units, measured on Forever's art: the rim's outer edge sits this far
+-- in from each piece's left, right, top and bottom side, and the rim with its
+-- dark inner line is METAL_BAND deep. Only that band is drawn.
+local METAL_L, METAL_R, METAL_T, METAL_B, METAL_BAND = 12.5, 2.5, 13, 7.5, 6
+
+local metalArt
+function DiveBar.MetalArt()
+	if metalArt ~= nil then
+		return metalArt
+	end
+	metalArt = false
+	-- Other clients ship this atlas in their own metal, cut to other margins.
+	if not (WOW_PROJECT_CAMELOT and WOW_PROJECT_ID == WOW_PROJECT_CAMELOT) then
+		return false
+	end
+	if not (C_Texture and C_Texture.GetAtlasInfo) then
+		return false
+	end
+	local found = {}
+	for key, name in pairs(METAL_ATLAS) do
+		local info = C_Texture.GetAtlasInfo(name)
+		if not info or not (info.file or info.filename) or (info.width or 0) <= 0 or (info.height or 0) <= 0 then
+			return false
+		end
+		found[key] = info
+	end
+	metalArt = found
+	return found
+end
+
+local function CropAtlas(tex, info, x1, x2, y1, y2)
+	local L, T = info.leftTexCoord, info.topTexCoord
+	local W, H = info.rightTexCoord - L, info.bottomTexCoord - T
+	tex:SetTexCoord(L + W * x1 / info.width, L + W * x2 / info.width, T + H * y1 / info.height, T + H * y2 / info.height)
+end
+
+local function BorderParts(holder)
+	return { holder.tl, holder.tr, holder.bl, holder.br, holder.top, holder.bottom, holder.left, holder.right }
+end
+
+-- The edges repeat along their length at the rim's scale, as Blizzard's windows
+-- draw them, so a long frame does not smear the metal.
+local function TileMetal(holder)
+	local art = holder.skin == "metal" and DiveBar.MetalArt()
+	local size = holder.size or 0
+	if not art or size <= 0 then
+		return
+	end
+	local scale = size / METAL_BAND
+	local band = METAL_BAND
+	local across = math.max((holder:GetWidth() or 0) - size * 2, 0) / scale
+	local down = math.max((holder:GetHeight() or 0) - size * 2, 0) / scale
+	local i = art.top
+	CropAtlas(holder.top, i, 0, i.tilesHorizontally and across or i.width, METAL_T, METAL_T + band)
+	i = art.bottom
+	CropAtlas(holder.bottom, i, 0, i.tilesHorizontally and across or i.width, i.height - METAL_B - band, i.height - METAL_B)
+	i = art.left
+	CropAtlas(holder.left, i, METAL_L, METAL_L + band, 0, i.tilesVertically and down or i.height)
+	i = art.right
+	CropAtlas(holder.right, i, i.width - METAL_R - band, i.width - METAL_R, 0, i.tilesVertically and down or i.height)
+end
+
+-- "metal" is Forever's window rim, "solid" a plain band of the same depth, and
+-- "tooltip" the tooltip line, where the client has no metal.
+local function SkinBorder(holder, skin)
+	if skin == "metal" and not DiveBar.MetalArt() then
+		skin = "tooltip"
+	elseif skin ~= "metal" and skin ~= "solid" then
+		skin = "tooltip"
+	end
+	if holder.skin == skin then
+		return
+	end
+	holder.skin = skin
+	holder.band = skin ~= "tooltip"
+	local parts = BorderParts(holder)
+	if skin == "tooltip" then
+		for i = 1, #parts do
+			parts[i]:SetTexture(BORDER_TEX)
+		end
+		CropTooltip(holder)
+		return
+	end
+	if skin == "solid" then
+		for i = 1, #parts do
+			parts[i]:SetTexture("Interface\\Buttons\\WHITE8X8")
+			parts[i]:SetTexCoord(0, 1, 0, 1)
+		end
+		return
+	end
+	local art = DiveBar.MetalArt()
+	for key, info in pairs(art) do
+		local wrapH = (key == "top" or key == "bottom") and info.tilesHorizontally and "REPEAT" or "CLAMP"
+		local wrapV = (key == "left" or key == "right") and info.tilesVertically and "REPEAT" or "CLAMP"
+		holder[key]:SetTexture(info.file or info.filename, wrapH, wrapV)
+	end
+	local band = METAL_BAND
+	local i = art.tl
+	CropAtlas(holder.tl, i, METAL_L, METAL_L + band, METAL_T, METAL_T + band)
+	i = art.tr
+	CropAtlas(holder.tr, i, i.width - METAL_R - band, i.width - METAL_R, METAL_T, METAL_T + band)
+	i = art.bl
+	CropAtlas(holder.bl, i, METAL_L, METAL_L + band, i.height - METAL_B - band, i.height - METAL_B)
+	i = art.br
+	CropAtlas(holder.br, i, i.width - METAL_R - band, i.width - METAL_R, i.height - METAL_B - band, i.height - METAL_B)
+	TileMetal(holder)
+end
+
+-- shade darkens the whole rim, for the XP badge.
+local function PaintBorder(holder, theme, shade)
+	shade = shade or 1
+	local r, g, b = 1, 1, 1
+	local skin = holder.skin
+	if skin == "solid" then
+		local color = theme.bandColor or theme.edgeTop or { 0.416, 0.416, 0.416 }
+		r, g, b = color[1], color[2], color[3]
+	elseif skin == "tooltip" and theme.edgeTint then
+		r, g, b = theme.edgeTint[1], theme.edgeTint[2], theme.edgeTint[3]
+	end
+	local desaturate = skin == "metal" and theme.desaturate and true or false
+	local parts = BorderParts(holder)
+	for i = 1, #parts do
+		parts[i]:SetDesaturated(desaturate)
+		parts[i]:SetVertexColor(r * shade, g * shade, b * shade, 1)
+	end
+	local hairline = skin == "solid" and theme.hairline
+	for i = 1, #holder.hairline do
+		local line = holder.hairline[i]
+		if hairline then
+			line:SetVertexColor(hairline[1] * shade, hairline[2] * shade, hairline[3] * shade, 1)
+		end
+		line:SetShown(hairline and true or false)
+	end
+end
+
+-- One physical screen pixel in the region's own units.
+local function OnePixel(region)
+	local scale = region:GetEffectiveScale() or 1
+	local height = GetPhysicalScreenSize and select(2, GetPhysicalScreenSize())
+	if not height or height <= 0 or scale <= 0 then
+		return 1
+	end
+	return 768 / height / scale
+end
+
 local function MakeBorder(bar)
 	local holder = CreateFrame("Frame", nil, bar)
 	holder:SetAllPoints(bar)
@@ -86,7 +254,7 @@ local function MakeBorder(bar)
 		holder:SetMouseMotionEnabled(false)
 	end
 	local function piece()
-		local tex = holder:CreateTexture(nil, "OVERLAY", nil, 7)
+		local tex = holder:CreateTexture(nil, "OVERLAY", nil, 6)
 		tex:SetTexture(BORDER_TEX)
 		return tex
 	end
@@ -98,15 +266,26 @@ local function MakeBorder(bar)
 	holder.bottom = piece()
 	holder.left = piece()
 	holder.right = piece()
-	-- Each slice is 16 texels. The line is the outer 6.
-	CropBorder(holder.left, 0, 6, 0, 16, false)
-	CropBorder(holder.right, 26, 32, 0, 16, false)
-	CropBorder(holder.top, 32, 38, 0, 16, true)
-	CropBorder(holder.bottom, 58, 64, 0, 16, true)
-	CropBorder(holder.tl, 64, 70, 0, 6, false)
-	CropBorder(holder.tr, 90, 96, 0, 6, false)
-	CropBorder(holder.bl, 96, 102, 10, 16, false)
-	CropBorder(holder.br, 122, 128, 10, 16, false)
+	-- The solid band's outer edge, drawn over it.
+	holder.hairline = {}
+	local edges = {
+		{ "TOPLEFT", "TOPRIGHT" },
+		{ "BOTTOMLEFT", "BOTTOMRIGHT" },
+		{ "TOPLEFT", "BOTTOMLEFT" },
+		{ "TOPRIGHT", "BOTTOMRIGHT" },
+	}
+	for i = 1, #edges do
+		local line = holder:CreateTexture(nil, "OVERLAY", nil, 7)
+		line:SetTexture("Interface\\Buttons\\WHITE8X8")
+		line:SetPoint(edges[i][1], holder, edges[i][1], 0, 0)
+		line:SetPoint(edges[i][2], holder, edges[i][2], 0, 0)
+		line:Hide()
+		holder.hairline[i] = line
+	end
+	CropTooltip(holder)
+	holder.skin = "tooltip"
+	holder.band = false
+	holder:SetScript("OnSizeChanged", TileMetal)
 	bar.border = holder
 end
 
@@ -134,6 +313,14 @@ local function PlaceBorder(bar, thickness, rounded, fixed)
 	if holder:GetFrameLevel() ~= level then
 		holder:SetFrameLevel(level)
 	end
+	-- A band is opaque, so it stops where the rows start. Its corners are its
+	-- own (Forever's chamfers, or square), whatever Rounded corners says.
+	local size = t
+	if holder.band then
+		size = DiveBar.ContentInset(t, true)
+		rounded = true
+	end
+	holder.size = size
 	local caps = { holder.tl, holder.tr, holder.bl, holder.br }
 	for i = 1, #caps do
 		caps[i]:SetShown(rounded and true or false)
@@ -141,16 +328,16 @@ local function PlaceBorder(bar, thickness, rounded, fixed)
 	if rounded then
 		holder.tl:ClearAllPoints()
 		holder.tl:SetPoint("TOPLEFT", holder, "TOPLEFT", 0, 0)
-		holder.tl:SetSize(t, t)
+		holder.tl:SetSize(size, size)
 		holder.tr:ClearAllPoints()
 		holder.tr:SetPoint("TOPRIGHT", holder, "TOPRIGHT", 0, 0)
-		holder.tr:SetSize(t, t)
+		holder.tr:SetSize(size, size)
 		holder.bl:ClearAllPoints()
 		holder.bl:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", 0, 0)
-		holder.bl:SetSize(t, t)
+		holder.bl:SetSize(size, size)
 		holder.br:ClearAllPoints()
 		holder.br:SetPoint("BOTTOMRIGHT", holder, "BOTTOMRIGHT", 0, 0)
-		holder.br:SetSize(t, t)
+		holder.br:SetSize(size, size)
 		holder.top:ClearAllPoints()
 		holder.top:SetPoint("TOPLEFT", holder.tl, "TOPRIGHT", 0, 0)
 		holder.top:SetPoint("BOTTOMRIGHT", holder.tr, "BOTTOMLEFT", 0, 0)
@@ -181,6 +368,12 @@ local function PlaceBorder(bar, thickness, rounded, fixed)
 		holder.right:SetPoint("BOTTOMRIGHT", holder, "BOTTOMRIGHT", 0, t)
 		holder.right:SetWidth(t)
 	end
+	TileMetal(holder)
+	local px = OnePixel(holder)
+	holder.hairline[1]:SetHeight(px)
+	holder.hairline[2]:SetHeight(px)
+	holder.hairline[3]:SetWidth(px)
+	holder.hairline[4]:SetWidth(px)
 	holder:Show()
 	return t
 end
@@ -221,13 +414,13 @@ local function MakeBackground(bar)
 	bar.bg = bg
 end
 
-local function PlaceBackground(bar, t, rounded, color)
+local function PlaceBackground(bar, t, rounded, color, edge)
 	local bg = bar.bg
 	local r, g, b, a = color[1], color[2], color[3], color[4] or 1
 	for i = 1, #bg.all do
 		bg.all[i]:SetVertexColor(r, g, b, a)
 	end
-	local edge = t * DiveBar.BORDER_SILVER
+	edge = edge or t * DiveBar.BORDER_SILVER
 	local mid = bg.mid
 	mid:ClearAllPoints()
 	if not rounded then
@@ -581,13 +774,11 @@ function DiveBar:BuildBar(globalName, parent, interactive)
 	bar.cast.name = bar.cast.overlay:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	bar.cast.name:SetJustifyH("LEFT")
 	bar.cast.name:SetWordWrap(false)
-	bar.cast.nameBG = Solid(bar.cast.overlay, "ARTWORK", 1)
 	bar.cast.time = bar.cast.overlay:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	bar.cast.time:SetJustifyH("RIGHT")
 	bar.cast.time:SetWordWrap(false)
 	bar.cast.name:SetPoint("LEFT", bar.cast.overlay, "LEFT", 6, 0)
 	bar.cast.time:SetPoint("RIGHT", bar.cast.overlay, "RIGHT", -6, 0)
-	bar.cast.nameBG:SetPoint("CENTER", bar.cast.name, "CENTER", 0, 0)
 
 	bar.swing = {}
 	local keys = { "melee", "off", "shot", "wand" }
@@ -665,18 +856,18 @@ function DiveBar:ApplyEdge(bar, theme)
 	-- Thickness follows the slider. The piece is only the gold line, so a
 	-- short experience frame does not have to shrink every setting to one size.
 	local thickness = bar._fitRim or theme.rim or DiveBar.BorderThickness(theme.borderSize)
-	local rounded = not (self.profile and self.profile.roundedCorners == false)
-	local line = PlaceBorder(bar, thickness, rounded)
-	PlaceBackground(bar, line, rounded, theme.background or { 0.02, 0.02, 0.02, 0.95 })
-	local r, g, b = 1, 1, 1
-	if theme.flatBorder then
-		r, g, b = 0.7, 0.7, 0.7
-	end
+	local rounded = theme.rounded ~= false
 	local holder = bar.border
-	local parts = { holder.tl, holder.tr, holder.bl, holder.br, holder.top, holder.bottom, holder.left, holder.right }
-	for i = 1, #parts do
-		parts[i]:SetVertexColor(r, g, b, 1)
+	SkinBorder(holder, theme.skin)
+	local line = PlaceBorder(bar, thickness, rounded)
+	local background = theme.background or { 0.02, 0.02, 0.02, 0.95 }
+	if holder.band then
+		-- Halfway into the band, the background's square corner stays inside the chamfer.
+		PlaceBackground(bar, line, false, background, holder.size * 0.5)
+	else
+		PlaceBackground(bar, line, rounded, background)
 	end
+	PaintBorder(holder, theme)
 end
 
 function DiveBar:ApplyColors(bar, theme)
@@ -692,7 +883,6 @@ function DiveBar:ApplyColors(bar, theme)
 	end
 	paintRow(bar.cast)
 	Color(bar.cast.lat, theme.latency)
-	Color(bar.cast.nameBG, theme.nameBG)
 	Font(bar.cast.name, self.profile.textSize, theme.text)
 	Font(bar.cast.time, self.profile.textSize, theme.text)
 
@@ -709,12 +899,12 @@ function DiveBar:ApplyColors(bar, theme)
 end
 
 function DiveBar:ResolveChrome(contentH, theme)
-	return DiveBar.FitChrome(contentH, theme.borderSize, theme.rim, self.profile.roundedCorners ~= false)
+	return DiveBar.FitChrome(contentH, theme.borderSize, theme.rim, theme.rounded ~= false)
 end
 
 -- What the frame adds on each side of the Width setting: the border inset.
 function DiveBar:ChromeSide(profile, theme)
-	return DiveBar.ContentInset(theme.rim, profile.roundedCorners ~= false)
+	return DiveBar.ContentInset(theme.rim, theme.rounded ~= false)
 end
 
 function DiveBar:BlockRow(bar, block)
@@ -954,15 +1144,8 @@ function DiveBar:Paint(bar, state, theme, profile, width)
 	if label ~= "" then
 		cast.name:Show()
 		cast.name:SetText(label)
-		if theme.namePlate then
-			cast.nameBG:Show()
-			cast.nameBG:SetSize(cast.name:GetStringWidth() + 8, cast.name:GetStringHeight() + 3)
-		else
-			cast.nameBG:Hide()
-		end
 	else
 		cast.name:Hide()
-		cast.nameBG:Hide()
 	end
 
 	if state.showTime and (mode == "cast" or mode == "channel") and (state.total or 0) > 0 then
@@ -1112,7 +1295,7 @@ function DiveBar:PaintLevelTime(bar, row, text, filled, troughW, profile, theme,
 		return
 	end
 	label:Hide()
-	local rounded = profile.roundedCorners ~= false
+	local rounded = theme.rounded ~= false
 	local rim, padX, height = self.XPBadgeLayout(textSize, size, bar._fitRim or theme.rim, rounded)
 	SetLevelText(badge.label, self.XPBadgeSample(profile.xpBadgeFormat), textSize, "")
 	local contentW = badge.label:GetStringWidth() or 0
@@ -1129,22 +1312,24 @@ function DiveBar:PaintLevelTime(bar, row, text, filled, troughW, profile, theme,
 	badge:SetFrameLevel(badgeLevel)
 	badge:SetSize(width, height)
 	badge:ClearAllPoints()
-	local shadow = rim * self.BORDER_SHADOW
+	local holder = badge.border
+	SkinBorder(holder, theme.skin)
+	-- The tooltip line starts after its soft shadow; a band starts at the edge.
+	local shadow = holder.band and 0 or rim * self.BORDER_SHADOW
 	local offset = self.XPBadgeOffset(filled, width, troughW, shadow)
 	badge:SetPoint("LEFT", row.trough, "LEFT", offset, 0)
 	PlaceBadgeFill(badge, rim, rounded)
 	PlaceBorder(badge, rim, rounded, true)
-	local shade = theme.flatBorder and 0.7 or 0.85
-	local holder = badge.border
-	local parts = { holder.tl, holder.tr, holder.bl, holder.br, holder.top, holder.bottom, holder.left, holder.right }
-	for i = 1, #parts do
-		parts[i]:SetVertexColor(shade, shade, shade, 1)
-	end
+	PaintBorder(holder, theme, holder.skin == "solid" and 1 or 0.85)
 	-- Whichever rim edge lands on the end of the blue fill is the measuring edge.
 	local rightMark = offset + width - shadow
 	local leftMark = offset + shadow
 	local markRight = math.abs(rightMark - filled) <= math.abs(leftMark - filled)
 	local silver, corner = self.XPBadgeFillInset(rim, rounded)
+	-- A band is opaque, so the marker moves in to its inner edge.
+	if holder.band and holder.size > silver then
+		silver = holder.size
+	end
 	-- Keep the marker clear of the rounded corners without inverting on a short badge.
 	local halfH = height / 2
 	if corner > halfH - 0.5 then

@@ -22,8 +22,6 @@ DiveBar.THEMES = {
 		background = { 0.03, 0.024, 0.018, 0.95 },
 		empty = { 0.095, 0.078, 0.06 },
 		troughTop = { 0.651, 0.518, 0.345 },
-		namePlate = true,
-		nameBG = { 0.047, 0.043, 0.345 },
 		text = { 1, 0.824, 0 },
 		cast = { 0.141, 0.341, 0.722 },
 		castTop = { 0.431, 0.604, 0.878 },
@@ -44,6 +42,8 @@ DiveBar.THEMES = {
 		lipColor = { 0.416, 0.306, 0.173 },
 		lipTop = { 0.941, 0.867, 0.706 },
 		lipBottom = { 0.110, 0.071, 0.047 },
+		skin = "metal",
+		edgeTint = { 0.851, 0.659, 0.420 },
 	}),
 	Flat = theme({
 		rim = 2,
@@ -60,8 +60,6 @@ DiveBar.THEMES = {
 		background = { 0.025, 0.025, 0.025, 0.95 },
 		empty = { 0.085, 0.085, 0.085 },
 		troughTop = { 0.102, 0.102, 0.102 },
-		namePlate = false,
-		nameBG = { 0, 0, 0, 0 },
 		text = { 1, 0.824, 0 },
 		cast = { 0.141, 0.341, 0.722 },
 		castTop = { 0.431, 0.604, 0.878 },
@@ -78,6 +76,10 @@ DiveBar.THEMES = {
 		steelTop = { 0.835, 0.886, 0.925 },
 		spark = { 1, 0.953, 0.769 },
 		flatBorder = true,
+		-- Ink: a band a shade under the background, edged by one crisp pixel.
+		skin = "solid",
+		bandColor = { 0.012, 0.012, 0.012 },
+		hairline = { 0.30, 0.30, 0.30 },
 		iconEdge = { 0.361, 0.361, 0.361 },
 		iconEdgeShadow = { 0.361, 0.361, 0.361 },
 		lipColor = { 0.28, 0.28, 0.28 },
@@ -99,8 +101,6 @@ DiveBar.THEMES = {
 		background = { 0.025, 0.025, 0.025, 0.95 },
 		empty = { 0.085, 0.085, 0.085 },
 		troughTop = { 0.078, 0.078, 0.078 },
-		namePlate = false,
-		nameBG = { 0, 0, 0, 0 },
 		text = { 1, 0.824, 0 },
 		cast = { 0.122, 0.365, 0.831 },
 		castTop = { 0.663, 0.784, 1 },
@@ -121,6 +121,10 @@ DiveBar.THEMES = {
 		lipColor = { 0.902, 0.765, 0.290 },
 		lipTop = { 1, 0.965, 0.769 },
 		lipBottom = { 0.353, 0.267, 0.031 },
+		-- Classic's cast bar, tooltip and dialog borders are neutral silver,
+		-- so the metal rim drops its bronze.
+		skin = "metal",
+		desaturate = true,
 	}),
 }
 
@@ -130,25 +134,25 @@ function DiveBar:Theme()
 	if not self.profile then
 		return base
 	end
-	local border = tonumber(self.profile.border) or 3
-	if border < 1 then
-		border = 1
-	elseif border > 20 then
-		border = 20
-	end
 	local theme = {}
 	for key, value in pairs(base) do
 		theme[key] = value
 	end
-	-- Tooltip border art. The slider scales the gold line. The background
-	-- tucks under that line; FitChrome sets the smaller inset.
-	local edgeSize = math.floor(10 + (border - 1) * (26 / 19) + 0.5)
-	local rim = DiveBar.BorderThickness(edgeSize)
+	-- The slider sets the band: the drawn rim, which is also where the rows start.
+	-- rim is the tooltip slice that holds a band that deep inside its rounded inset.
+	local rim = DiveBar.BorderBand(self.profile.border) / DiveBar.BORDER_INSET_ROUNDED
 	theme.rim = rim
 	theme.edge = rim
 	theme.pad = 0
 	theme.gap = 0
 	theme.lip = 0
-	theme.borderSize = edgeSize
+	theme.borderSize = rim / DiveBar.BORDER_LINE
+	local skin = base.skin or "tooltip"
+	if skin == "metal" and not (DiveBar.MetalArt and DiveBar.MetalArt()) then
+		skin = "tooltip"
+	end
+	theme.skin = skin
+	-- A band brings its own corners and always insets the rows by its depth.
+	theme.rounded = skin ~= "tooltip" or self.profile.roundedCorners ~= false
 	return theme
 end

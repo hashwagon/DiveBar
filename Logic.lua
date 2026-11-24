@@ -44,7 +44,7 @@ DiveBar.DEFAULTS = {
 	opacity = 1,
 	textSize = 10,
 	lock = false,
-	border = 4,
+	border = 10,
 	margin = 0,
 	roundedCorners = true,
 	order = { "cast", "timers", "swings", "xp" },
@@ -156,6 +156,15 @@ function DiveBar.Migrate(profile)
 		profile.textSize = 10
 	end
 	profile.textScaled = true
+	-- Border used to scale a tooltip slice, and the band was 5/6 of it.
+	-- Keep that band; the slider now reaches thinner.
+	if not profile.borderBand and tonumber(profile.border) then
+		local old = math.max(1, math.min(20, tonumber(profile.border)))
+		local edge = math.floor(10 + (old - 1) * (26 / 19) + 0.5)
+		local slice = math.max(2, edge * 6 / 16)
+		profile.border = DiveBar.BorderForBand(slice * 5 / 6)
+	end
+	profile.borderBand = true
 	if profile.xpLevelTime == nil and profile.showXPBadge == false then
 		profile.xpLevelTime = "off"
 	end
@@ -710,6 +719,34 @@ DiveBar.BORDER_SHADOW = 0.6
 -- curve keeps that line about 2.5 texels from the corner piece's inner corner.
 -- The background stops on that middle, so the silver hides its edge.
 DiveBar.BORDER_SILVER = 3.5 / 6
+
+-- The Border slider sets the band, the drawn rim, from a hairline up to the
+-- weight of Forever's own window rims.
+DiveBar.BORDER_BAND_MIN = 1
+DiveBar.BORDER_BAND_MAX = 6
+
+function DiveBar.BorderBand(border)
+	local value = tonumber(border) or DiveBar.DEFAULTS.border
+	if value < 1 then
+		value = 1
+	elseif value > 20 then
+		value = 20
+	end
+	return DiveBar.BORDER_BAND_MIN + (value - 1) * (DiveBar.BORDER_BAND_MAX - DiveBar.BORDER_BAND_MIN) / 19
+end
+
+-- The slider position that draws `band`, on the half steps the slider takes.
+function DiveBar.BorderForBand(band)
+	local span = DiveBar.BORDER_BAND_MAX - DiveBar.BORDER_BAND_MIN
+	local value = 1 + ((tonumber(band) or 0) - DiveBar.BORDER_BAND_MIN) * 19 / span
+	value = math.floor(value * 2 + 0.5) / 2
+	if value < 1 then
+		value = 1
+	elseif value > 20 then
+		value = 20
+	end
+	return value
+end
 
 function DiveBar.BorderThickness(edge)
 	local thickness = (tonumber(edge) or 0) * DiveBar.BORDER_LINE
