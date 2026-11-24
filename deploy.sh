@@ -7,6 +7,7 @@ SRC="$(cd "$(dirname "$0")" && pwd)"
 DEST="${DIVEBAR_DEST:-}"
 if [[ -z "$DEST" && -f "$SRC/.deploy-dest" ]]; then
 	DEST="$(head -n 1 "$SRC/.deploy-dest")"
+	DEST="${DEST%$'\r'}"
 	DEST="${DEST/#\~/$HOME}"
 fi
 if [[ -z "$DEST" ]]; then

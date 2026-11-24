@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.0
+
+- First release on CurseForge.
+- New Dive Bar art for the minimap button and the options window portrait.
+- Options: tooltips explain each setting, replacing the notes under the controls, so the window is shorter. Tick boxes can be clicked on their labels.
+- Options: "Blizzard bar" is now "Show Blizzard bar", and Background margin sits beside Width.
+- Options: profile Reset and Delete sit next to the profile list, and Copy sits beside its list. The new profile box shows a hint until you type.
+- Options: the version shown in the Profiles section matches the installed version.
+- Options: the preview area is dark edge to edge with no divider under it, and the mouse wheel scrolls in smaller steps.
+- Clearer messages when the Blizzard bars can't be hidden.
+
 ## 1.2.0
 
 - XP badge: the badge scales with its Size setting, text and padding are sized separately, and each time format has a fixed width so the badge doesn't jump around.

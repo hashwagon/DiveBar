@@ -1,19 +1,21 @@
 # Dive Bar
 
-A World of Warcraft addon that puts your cast bar, breath, fatigue, and Feign Death timers, swing timers, and an experience line into one player frame.
+**One frame for every bar you actually watch.**
+
+A cast bar here, a swing timer addon there, an XP bar along the bottom edge, and a stack of Blizzard timers wherever they happen to land. Dive Bar replaces that clutter with one clean, consistent frame: your cast bar, swing timers, and experience line together, styled the same way and in the same place. Fewer addons to keep up to date, fewer bars to track, and more attention left for the fight.
 
 Dive Bar is built for and tested on **WoW Forever**. The code also supports Classic Era, but Era gets far less testing.
 
 ## Features
 
-- **Cast bar** with optional spell icon, spell name, cast time, and latency.
-- **Timer bars** for breath, fatigue, and Feign Death.
-- **Swing timers** for melee and for ranged or wand attacks, with an optional single-weapon timer.
-- **Experience line** showing rested XP and completed-quest XP, plus a time-to-level badge. XP per hour can appear in the tooltip.
-- **Themes:** Forever, Flat, and Classic, with optional rounded corners.
-- **Blizzard bars:** each default Blizzard bar can be turned on or off through your active Edit Mode layout.
-- **Profiles:** each character can use its own profile, or several characters can share one.
-- A minimap button and an options window.
+- **A cast bar you can read at a glance.** Spell icon, spell name, and cast time are each optional, and latency is shown on the bar so you know when the next cast can start.
+- **Swing timers built in.** Melee and ranged or wand swings each get their own timer, with an optional single-weapon mode. You don't need a separate swing timer addon.
+- **An experience line that does more.** Rested XP and XP from quests you've completed but not turned in are both shown on the line, along with a time-to-level badge. XP per hour can appear in the tooltip.
+- **Every other timer, in the same frame.** Breath, fatigue, and Feign Death appear in Dive Bar when they're running, then get out of the way.
+- **A look that fits your UI.** Choose the Forever, Flat, or Classic theme, with optional rounded corners, and tune the size, padding, and opacity.
+- **No doubled-up bars.** Turn each default Blizzard bar on or off through your active Edit Mode layout, so Dive Bar replaces the old bars instead of sitting next to them.
+- **Profiles for your alts.** Give each character its own setup, or share one across all of them.
+- A minimap button and an options window with a live preview of each bar.
 
 ## Installation
 

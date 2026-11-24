@@ -50,6 +50,31 @@ local function Cream(parent, text)
 	return font
 end
 
+local function HideTooltip()
+	GameTooltip:Hide()
+end
+
+local function Tooltip(frame, title, text)
+	frame:HookScript("OnEnter", function(self)
+		GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+		GameTooltip:SetText(title, 1, 0.82, 0)
+		if text then
+			GameTooltip:AddLine(text, 1, 1, 1, true)
+		end
+		GameTooltip:Show()
+	end)
+	frame:HookScript("OnLeave", HideTooltip)
+end
+
+-- Sliders and fallback dropdowns cover their holder with child frames, so hook those too.
+local function Help(widget, title, text)
+	if widget.slider then
+		widget:EnableMouse(true)
+		Tooltip(widget.slider, title, text)
+	end
+	Tooltip(widget.button or widget, title, text)
+end
+
 local function HideMenu()
 	if menu then
 		menu:Hide()
@@ -244,7 +269,7 @@ local function Button(parent, text, width)
 	return button
 end
 
-local function Check(parent, text, apply)
+local function Check(parent, text, apply, help)
 	local button = CreateFrame("CheckButton", nil, parent)
 	button:SetSize(24, 24)
 	button:SetNormalTexture("Interface\\Buttons\\UI-CheckBox-Up")
@@ -254,6 +279,10 @@ local function Check(parent, text, apply)
 	local label = Cream(parent, text)
 	label:SetPoint("LEFT", button, "RIGHT", 2, 0)
 	button.label = label
+	button:SetHitRectInsets(0, -(math.ceil(label:GetStringWidth() or 0) + 4), 0, 0)
+	if help then
+		Tooltip(button, text, help)
+	end
 	button:SetScript("OnClick", function(self)
 		if self.dimmed then
 			self:SetChecked(not self:GetChecked())
@@ -264,7 +293,6 @@ local function Check(parent, text, apply)
 	end)
 	function button:SetDimmed(dim)
 		self.dimmed = dim and true or false
-		self:EnableMouse(not self.dimmed)
 		local alpha = self.dimmed and 0.45 or 1
 		self:SetAlpha(alpha)
 		label:SetAlpha(alpha)
@@ -347,6 +375,7 @@ local function Dropdown(parent, width, itemsFn, get, apply)
 	button.text:SetPoint("LEFT", 8, 0)
 	button.text:SetPoint("RIGHT", -16, 0)
 	button.text:SetJustifyH("LEFT")
+	box.button = button
 	local caret = button:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 	caret:SetPoint("RIGHT", -6, 0)
 	caret:SetText("v")
@@ -376,7 +405,7 @@ local function Dropdown(parent, width, itemsFn, get, apply)
 	return box
 end
 
--- The sticky preview: heading and tick boxes above the bar, the divider below it.
+-- The sticky preview: heading and tick boxes above the bar.
 local PREVIEW_TOP = 34
 local PREVIEW_BOTTOM = 6
 
@@ -626,7 +655,6 @@ function DiveBar:SyncOptions()
 	end
 
 	dim(self.consolidateCheck, not bothClasses)
-	fade(self.consolidateNote, not bothClasses)
 	dim(self.colorMelee, not meleeOn)
 	dim(self.colorOff, not meleeOn)
 	dim(self.colorShot, not rangedOn)
@@ -640,7 +668,6 @@ function DiveBar:SyncOptions()
 	if self.xpBadgeTextSize then
 		self.xpBadgeTextSize:SetLocked(levelOff)
 	end
-	fade(self.xpLevelTimeNote, levelOff)
 	if self.blizzNoteText then
 		self.blizzNoteText:SetText(self.blizzNote or "")
 		self.blizzNoteText:SetShown(self.blizzNote and true or false)
@@ -756,10 +783,6 @@ function DiveBar:BuildOptionSections(body)
 	local features = Host(nil)
 	self.featuresHost = features
 	local y = Header(features, "Bars", -4)
-	local featureNote = Cream(features, "Top of the frame is first. The anchor stays put. Bars above and below it show up while they are in use.")
-	featureNote:SetPoint("TOPLEFT", 8, y)
-	featureNote:SetWidth(600)
-	y = y - 32
 	self.featureRowY = y
 	self.featureRows = {}
 
@@ -773,6 +796,13 @@ function DiveBar:BuildOptionSections(body)
 		return 1, #order
 	end
 
+	local featureHelp = {
+		cast = "Casts and channels.",
+		timers = "Breath, fatigue and Feign Death.",
+		swings = "Melee, ranged and wand swings.",
+		xp = "Experience, rested XP and completed quest XP.",
+	}
+
 	for n = 1, #DiveBar.FEATURE_LIST do
 		local feature = DiveBar.FEATURE_LIST[n]
 		local flag = DiveBar.BLIZZARD_FLAG[feature]
@@ -783,15 +813,15 @@ function DiveBar:BuildOptionSections(body)
 			if not value then
 				DiveBar.profile.anchor = DiveBar.NormalizeAnchor(DiveBar.profile)
 			end
-		end)
+		end, featureHelp[feature])
 		enable:SetPoint("TOPLEFT", 4, -2)
 		enable.Refresh = function()
 			enable:SetChecked(DiveBar.profile[feature])
 		end
-		local blizz = Check(row, "Blizzard bar", function(value)
+		local blizz = Check(row, "Show Blizzard bar", function(value)
 			DiveBar.profile[flag] = value
 			DiveBar:ApplySuppression()
-		end)
+		end, "Keep the game's default bar visible as well. When unchecked, Dive Bar hides it.")
 		blizz:SetPoint("TOPLEFT", 200, -2)
 		blizz.Refresh = function()
 			blizz:SetChecked(DiveBar.profile[flag])
@@ -805,6 +835,7 @@ function DiveBar:BuildOptionSections(body)
 			DiveBar.profile.anchor = feature
 			DiveBar:Refresh()
 		end)
+		Tooltip(anchor, "Anchor", "This bar stays in place. The other bars stack above and below it.")
 		local up = Button(row, "Up", 40)
 		up:SetPoint("TOPLEFT", 478, -4)
 		up:SetScript("OnClick", function()
@@ -833,16 +864,12 @@ function DiveBar:BuildOptionSections(body)
 	y = y - (#DiveBar.FEATURE_LIST * 30) - 4
 	local always = Check(features, "Always show bars", function(value)
 		DiveBar.profile.alwaysShow = value
-	end)
+	end, "Show every enabled bar while idle. When off, a bar appears only while in use.")
 	always:SetPoint("TOPLEFT", 4, y)
 	always.Refresh = function()
 		always:SetChecked(DiveBar.profile.alwaysShow)
 	end
-	y = y - 24
-	local alwaysNote = Cream(features, "Show every enabled bar while idle. Off, a bar appears only while it is in use.")
-	alwaysNote:SetPoint("TOPLEFT", 32, y)
-	alwaysNote:SetWidth(560)
-	y = y - 28
+	y = y - 30
 	local blizzNote = Cream(features, "")
 	blizzNote:SetPoint("TOPLEFT", 8, y)
 	blizzNote:SetWidth(600)
@@ -877,6 +904,14 @@ function DiveBar:BuildOptionSections(body)
 		return tostring(math.floor(value + 0.5))
 	end)
 	widthSlider:SetPoint("TOPLEFT", 8, y)
+	local marginSlider = Slider(look, "Background margin", 0, 20, 1, function()
+		return DiveBar.profile.margin
+	end, function(value)
+		DiveBar.profile.margin = math.floor(value + 0.5)
+	end, function(value)
+		return tostring(math.floor(value + 0.5))
+	end)
+	marginSlider:SetPoint("TOPLEFT", 310, y)
 	y = y - 58
 	local scaleSlider = Slider(look, "Scale", 0.5, 2, 0.05, function()
 		return DiveBar.profile.scale
@@ -912,18 +947,9 @@ function DiveBar:BuildOptionSections(body)
 	end)
 	borderSlider:SetPoint("TOPLEFT", 310, y)
 	y = y - 58
-	local marginSlider = Slider(look, "Background margin", 0, 20, 1, function()
-		return DiveBar.profile.margin
-	end, function(value)
-		DiveBar.profile.margin = math.floor(value + 0.5)
-	end, function(value)
-		return tostring(math.floor(value + 0.5))
-	end)
-	marginSlider:SetPoint("TOPLEFT", 8, y)
-	y = y - 58
 	local lock = Check(look, "Lock", function(value)
 		DiveBar:SetLocked(value)
-	end)
+	end, "Unlock to drag the bars.")
 	lock:SetPoint("TOPLEFT", 4, y)
 	lock.Refresh = function()
 		lock:SetChecked(DiveBar.profile.lock)
@@ -974,7 +1000,7 @@ function DiveBar:BuildOptionSections(body)
 	end
 	local showLatency = Check(castHost, "Latency", function(value)
 		DiveBar.profile.showLatency = value
-	end)
+	end, "Shade the end of the cast to show your latency.")
 	showLatency:SetPoint("LEFT", showTime.label, "RIGHT", 18, 0)
 	showLatency.Refresh = function()
 		showLatency:SetChecked(DiveBar.profile.showLatency)
@@ -995,10 +1021,6 @@ function DiveBar:BuildOptionSections(body)
 	local timerHost = Host("timers")
 	self.detailHosts.timers = timerHost
 	y = Header(timerHost, "Timers", -4)
-	local timerNote = Cream(timerHost, "Breath, fatigue, and Feign Death.")
-	timerNote:SetPoint("TOPLEFT", 8, y)
-	timerNote:SetWidth(560)
-	y = y - 24
 	local timerHeight = Slider(timerHost, "Height", 3, 40, 1, function()
 		return DiveBar.profile.timerHeight
 	end, function(value)
@@ -1043,18 +1065,13 @@ function DiveBar:BuildOptionSections(body)
 	y = y - 58
 	local consolidate = Check(swingHost, "Single weapon timer", function(value)
 		DiveBar.profile.consolidate = value
-	end)
+	end, "Show one timer for the weapon in use. Shooting replaces melee, and a melee swing replaces the ranged timer. Needs Melee and Ranged on.")
 	consolidate:SetPoint("TOPLEFT", 4, y)
 	consolidate.Refresh = function()
 		consolidate:SetChecked(DiveBar.profile.consolidate)
 	end
 	self.consolidateCheck = consolidate
-	y = y - 24
-	local consolidateNote = Cream(swingHost, "Shooting replaces melee. A melee swing replaces the ranged timer.")
-	consolidateNote:SetPoint("TOPLEFT", 32, y)
-	consolidateNote:SetWidth(540)
-	self.consolidateNote = consolidateNote
-	y = y - 28
+	y = y - 30
 	local colorLabel = Cream(swingHost, "Colors")
 	colorLabel:SetPoint("TOPLEFT", 8, y)
 	y = y - 24
@@ -1178,29 +1195,20 @@ function DiveBar:BuildOptionSections(body)
 		if DiveBar.ReadXP then
 			DiveBar:ReadXP()
 		end
-	end)
+	end, "Yellow bar for XP from quests ready to turn in.")
 	questXP:SetPoint("TOPLEFT", 4, y)
 	questXP.Refresh = function()
 		questXP:SetChecked(DiveBar.profile.showQuestXP)
 	end
-	y = y - 24
-	local questNote = Cream(xpHost, "Yellow bar for quests that are ready to turn in.")
-	questNote:SetPoint("TOPLEFT", 32, y)
-	questNote:SetWidth(540)
-	y = y - 22
 	local xpRate = Check(xpHost, "XP per hour in tooltip", function(value)
 		DiveBar.profile.showXPRate = value
 		DiveBar:RefreshXPTooltip()
-	end)
-	xpRate:SetPoint("TOPLEFT", 4, y)
+	end, "Adds session XP, XP per hour, time to level and kills to level.")
+	xpRate:SetPoint("TOPLEFT", 306, y)
 	xpRate.Refresh = function()
 		xpRate:SetChecked(DiveBar.profile.showXPRate)
 	end
-	y = y - 24
-	local rateNote = Cream(xpHost, "Session XP, XP per hour, time to level and kills to level.")
-	rateNote:SetPoint("TOPLEFT", 32, y)
-	rateNote:SetWidth(540)
-	y = y - 22
+	y = y - 34
 	local styleDrop = Dropdown(xpHost, 140, function()
 		return {
 			{ "badge", "Badge" },
@@ -1215,6 +1223,7 @@ function DiveBar:BuildOptionSections(body)
 	local styleLabel = Cream(xpHost, "Time to level")
 	styleLabel:SetPoint("TOPLEFT", 8, y - 4)
 	styleDrop:SetPoint("LEFT", styleLabel, "RIGHT", 12, 0)
+	Help(styleDrop, "Time to level", "Estimated time to level, shown where your experience ends. Shows an infinity sign until you earn XP this session.")
 	local formatDrop = Dropdown(xpHost, 200, function()
 		return {
 			{ "decimal", "Decimal (2.6h)" },
@@ -1231,7 +1240,7 @@ function DiveBar:BuildOptionSections(body)
 	self.xpBadgeFormat = formatDrop
 	self.xpBadgeFormatLabel = formatLabel
 	y = y - 32
-	local textSize = Slider(xpHost, "Text size", 4, 24, 1, function()
+	local textSize = Slider(xpHost, "Time text size", 4, 24, 1, function()
 		return DiveBar.profile.xpBadgeTextSize
 	end, function(value)
 		DiveBar.profile.xpBadgeTextSize = math.floor(value + 0.5)
@@ -1248,22 +1257,14 @@ function DiveBar:BuildOptionSections(body)
 		return tostring(math.floor(value + 0.5))
 	end)
 	levelSize:SetPoint("TOPLEFT", 310, y)
+	Help(levelSize, "Badge padding", "Room around the time inside the badge. Lower it to keep large text in a snug badge.")
 	self.xpLevelTimeSize = levelSize
 	y = y - 58
-	local levelNote = Cream(xpHost, "Ends where your experience ends. Shows an infinity sign until you earn experience this session. Text size sets the time. Badge padding sets the room around it, so large text can sit in a snug badge.")
-	levelNote:SetPoint("TOPLEFT", 8, y)
-	levelNote:SetWidth(560)
-	self.xpLevelTimeNote = levelNote
-	y = y - 34
 	xpHost:SetHeight(-y + 4)
 
 	local profiles = Host(nil)
 	self.profileHost = profiles
 	y = Header(profiles, "Profiles", -4)
-	local profileNote = Cream(profiles, "Each character starts on Default. Profiles are saved for the account.")
-	profileNote:SetPoint("TOPLEFT", 8, y)
-	profileNote:SetWidth(540)
-	y = y - 24
 	local currentLabel = Cream(profiles, "Profile")
 	currentLabel:SetPoint("TOPLEFT", 8, y)
 	local current = Dropdown(profiles, 200, function()
@@ -1279,67 +1280,9 @@ function DiveBar:BuildOptionSections(body)
 		DiveBar:SwitchProfile(value)
 	end)
 	current:SetPoint("LEFT", currentLabel, "RIGHT", 12, 0)
-	y = y - 36
-	local nameBox
-	if Supports("EditBox", "InputBoxTemplate") then
-		nameBox = CreateFrame("EditBox", nil, profiles, "InputBoxTemplate")
-		nameBox:SetSize(184, 20)
-	else
-		nameBox = CreateFrame("EditBox", nil, profiles)
-		nameBox:SetSize(180, 22)
-		nameBox:SetFontObject(GameFontHighlight)
-		nameBox:SetTextInsets(6, 6, 0, 0)
-		local nameBG = nameBox:CreateTexture(nil, "BACKGROUND")
-		nameBG:SetAllPoints()
-		ColorTex(nameBG, 0.08, 0.05, 0.03, 1)
-	end
-	nameBox:SetPoint("TOPLEFT", 8, y)
-	nameBox:SetAutoFocus(false)
-	nameBox:SetMaxLetters(24)
-	nameBox:SetScript("OnEscapePressed", function(self)
-		self:ClearFocus()
-	end)
-	nameBox:SetScript("OnEnterPressed", function(self)
-		self:ClearFocus()
-		DiveBar:CreateProfile(self:GetText())
-		self:SetText("")
-	end)
-	local newButton = Button(profiles, "New", 64)
-	newButton:SetPoint("LEFT", nameBox, "RIGHT", 8, 0)
-	newButton:SetScript("OnClick", function()
-		DiveBar:CreateProfile(nameBox:GetText())
-		nameBox:SetText("")
-		nameBox:ClearFocus()
-	end)
-	local copyLabel = Cream(profiles, "Copy from")
-	copyLabel:SetPoint("LEFT", newButton, "RIGHT", 16, 0)
-	self.copyName = self.profileName
-	local copyDrop = Dropdown(profiles, 140, function()
-		local items = {}
-		local names = DiveBar:ProfileNames()
-		for i = 1, #names do
-			items[#items + 1] = { names[i], names[i] }
-		end
-		return items
-	end, function()
-		if not DiveBar.db.profiles[DiveBar.copyName] then
-			DiveBar.copyName = DiveBar.profileName
-		end
-		return DiveBar.copyName or DiveBar.profileName
-	end, function(value)
-		DiveBar.copyName = value
-	end)
-	copyDrop:SetPoint("LEFT", copyLabel, "RIGHT", 8, 0)
-	y = y - 32
-	local copyButton = Button(profiles, "Copy", 64)
-	copyButton:SetPoint("TOPLEFT", 8, y)
-	copyButton:SetScript("OnClick", function()
-		if DiveBar.copyName then
-			DiveBar:CopyFromProfile(DiveBar.copyName)
-		end
-	end)
+	Help(current, "Profile", "Profiles are shared across your account. New characters start on Default.")
 	local resetButton = Button(profiles, "Reset", 64)
-	resetButton:SetPoint("LEFT", copyButton, "RIGHT", 8, 0)
+	resetButton:SetPoint("LEFT", current, "RIGHT", 16, 0)
 	resetButton:SetScript("OnClick", function()
 		local dialog = StaticPopup_Show("DIVEBAR_CONFIRM", "Reset " .. DiveBar.profileName .. " to default settings?")
 		if dialog then
@@ -1363,6 +1306,72 @@ function DiveBar:BuildOptionSections(body)
 		end
 	end)
 	self.deleteButton = deleteButton
+	y = y - 36
+	local nameBox
+	if Supports("EditBox", "InputBoxTemplate") then
+		nameBox = CreateFrame("EditBox", nil, profiles, "InputBoxTemplate")
+		nameBox:SetSize(150, 20)
+	else
+		nameBox = CreateFrame("EditBox", nil, profiles)
+		nameBox:SetSize(150, 22)
+		nameBox:SetFontObject(GameFontHighlight)
+		nameBox:SetTextInsets(6, 6, 0, 0)
+		local nameBG = nameBox:CreateTexture(nil, "BACKGROUND")
+		nameBG:SetAllPoints()
+		ColorTex(nameBG, 0.08, 0.05, 0.03, 1)
+	end
+	nameBox:SetPoint("TOPLEFT", 8, y)
+	nameBox:SetAutoFocus(false)
+	nameBox:SetMaxLetters(24)
+	local placeholder = nameBox:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+	placeholder:SetPoint("LEFT", 2, 0)
+	placeholder:SetText("New profile name")
+	nameBox:SetScript("OnTextChanged", function(self)
+		placeholder:SetShown(self:GetText() == "")
+	end)
+	nameBox:SetScript("OnEscapePressed", function(self)
+		self:ClearFocus()
+	end)
+	nameBox:SetScript("OnEnterPressed", function(self)
+		self:ClearFocus()
+		DiveBar:CreateProfile(self:GetText())
+		self:SetText("")
+	end)
+	local newButton = Button(profiles, "New", 64)
+	newButton:SetPoint("LEFT", nameBox, "RIGHT", 8, 0)
+	newButton:SetScript("OnClick", function()
+		DiveBar:CreateProfile(nameBox:GetText())
+		nameBox:SetText("")
+		nameBox:ClearFocus()
+	end)
+	Tooltip(newButton, "New profile", "Saves the current settings under the typed name and switches to it.")
+	local copyLabel = Cream(profiles, "Copy from")
+	copyLabel:SetPoint("LEFT", newButton, "RIGHT", 16, 0)
+	self.copyName = self.profileName
+	local copyDrop = Dropdown(profiles, 140, function()
+		local items = {}
+		local names = DiveBar:ProfileNames()
+		for i = 1, #names do
+			items[#items + 1] = { names[i], names[i] }
+		end
+		return items
+	end, function()
+		if not DiveBar.db.profiles[DiveBar.copyName] then
+			DiveBar.copyName = DiveBar.profileName
+		end
+		return DiveBar.copyName or DiveBar.profileName
+	end, function(value)
+		DiveBar.copyName = value
+	end)
+	copyDrop:SetPoint("LEFT", copyLabel, "RIGHT", 8, 0)
+	local copyButton = Button(profiles, "Copy", 64)
+	copyButton:SetPoint("LEFT", copyDrop, "RIGHT", 8, 0)
+	copyButton:SetScript("OnClick", function()
+		if DiveBar.copyName then
+			DiveBar:CopyFromProfile(DiveBar.copyName)
+		end
+	end)
+	Tooltip(copyButton, "Copy", "Replaces this profile's settings with the chosen profile's.")
 	y = y - 32
 	local version = Cream(profiles, "Dive Bar " .. self.VERSION)
 	version:SetPoint("TOPLEFT", 8, y)
@@ -1464,8 +1473,18 @@ function DiveBar:CreateOptions()
 	end
 
 	local contentTop, contentLeft, contentRight, contentBottom
+	local portraitShown = false
 	if modernFrame then
-		if type(ButtonFrameTemplate_HidePortrait) == "function" then
+		local portrait = (panel.PortraitContainer and panel.PortraitContainer.portrait) or panel.portrait
+		if portrait then
+			if type(ButtonFrameTemplate_ShowPortrait) == "function" then
+				pcall(ButtonFrameTemplate_ShowPortrait, panel)
+			end
+			portrait:SetTexture("Interface\\AddOns\\DiveBar\\DiveBarPortrait")
+			portrait:SetTexCoord(0, 1, 0, 1)
+			portrait:Show()
+			portraitShown = true
+		elseif type(ButtonFrameTemplate_HidePortrait) == "function" then
 			pcall(ButtonFrameTemplate_HidePortrait, panel)
 		end
 		if type(ButtonFrameTemplate_HideButtonBar) == "function" then
@@ -1515,6 +1534,11 @@ function DiveBar:CreateOptions()
 		end
 		BindClose(_G[panel:GetName() and (panel:GetName() .. "CloseButton")])
 		contentLeft, contentTop, contentRight, contentBottom = 14, -34, -32, 16
+		if portraitShown then
+			-- The portrait hangs about 60px into the frame and would cover the Preview heading.
+			contentTop = -60
+			panel:SetHeight(panel:GetHeight() + 26)
+		end
 	else
 		if panel.SetBackdrop then
 			panel:SetBackdrop({
@@ -1596,24 +1620,45 @@ function DiveBar:CreateOptions()
 		scrollBar:SetScript("OnValueChanged", function(self, value)
 			scroll:SetVerticalScroll(value)
 		end)
-		scroll:EnableMouseWheel(true)
-		scroll:SetScript("OnMouseWheel", function(self, delta)
-			local nextValue = scrollBar:GetValue() - delta * 36
-			local _, maxValue = scrollBar:GetMinMaxValues()
-			if nextValue < 0 then
-				nextValue = 0
-			elseif nextValue > maxValue then
-				nextValue = maxValue
-			end
-			scrollBar:SetValue(nextValue)
-		end)
 	end
+	scroll:EnableMouseWheel(true)
+	scroll:SetScript("OnMouseWheel", function(self, delta)
+		local current, maxValue
+		if scrollBar and scrollBar.GetValue then
+			current = scrollBar:GetValue()
+			local _
+			_, maxValue = scrollBar:GetMinMaxValues()
+		else
+			current = self:GetVerticalScroll()
+			maxValue = self:GetVerticalScrollRange()
+		end
+		local nextValue = current - delta * 16
+		if nextValue < 0 then
+			nextValue = 0
+		elseif nextValue > maxValue then
+			nextValue = maxValue
+		end
+		if scrollBar and scrollBar.SetValue then
+			scrollBar:SetValue(nextValue)
+		else
+			self:SetVerticalScroll(nextValue)
+		end
+	end)
 
 	local header = CreateFrame("Frame", nil, panel)
 	header:SetPoint("TOPLEFT", panel, "TOPLEFT", contentLeft, contentTop)
 	header:SetPoint("TOPRIGHT", panel, "TOPRIGHT", contentRight, contentTop)
 	header:SetHeight(PREVIEW_TOP + 28 + PREVIEW_BOTTOM)
 	self.previewHeader = header
+	-- Lives on the panel so the border, portrait and title still draw over it.
+	local headerBG = panel:CreateTexture(nil, "BACKGROUND", nil, 7)
+	local bgInset, bgTop = 11, -12
+	if modernFrame then
+		bgInset, bgTop = 2, -21
+	end
+	headerBG:SetPoint("TOPLEFT", panel, "TOPLEFT", bgInset, bgTop)
+	headerBG:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", -contentRight - bgInset, 0)
+	ColorTex(headerBG, 0, 0, 0, 0.5)
 	local previewLabel = GoldLabel(header, "Preview", 16)
 	previewLabel:SetPoint("TOPLEFT", 8, -8)
 	local previewLine = header:CreateTexture(nil, "ARTWORK")
@@ -1645,10 +1690,6 @@ function DiveBar:CreateOptions()
 	previewEmpty:SetPoint("CENTER")
 	previewEmpty:Hide()
 	self.previewEmptyText = previewEmpty
-	local headerLine = header:CreateTexture(nil, "ARTWORK")
-	headerLine:SetPoint("BOTTOMLEFT", 8, 0)
-	headerLine:SetSize(600, 1)
-	ColorTex(headerLine, 1, 0.82, 0, 0.4)
 
 	scroll:ClearAllPoints()
 	scroll:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -4)

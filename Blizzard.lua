@@ -185,13 +185,13 @@ function DiveBar:ApplyBlizzardBars()
 	end
 	local note
 	if not (C_EditMode and C_EditMode.GetLayouts and C_EditMode.SaveLayouts and SystemId("CastBar")) then
-		self.blizzNote = "This client has no Edit Mode setting for the Blizzard bars."
+		self.blizzNote = "This client can't hide the Blizzard bars."
 		return
 	end
 	local ok, layouts = pcall(C_EditMode.GetLayouts)
 	local layout = ok and ActiveLayout(layouts) or nil
 	if not layout then
-		self.blizzNote = "Could not read the Edit Mode layout."
+		self.blizzNote = "Can't read the Edit Mode layout, so the Blizzard bars can't be hidden."
 		return
 	end
 	if IsPreset(layout) then
@@ -240,7 +240,7 @@ function DiveBar:ApplyBlizzardBars()
 	if changed then
 		local saved = pcall(C_EditMode.SaveLayouts, layouts)
 		if not saved then
-			note = "Could not update the Blizzard layout."
+			note = "Can't save the Edit Mode layout."
 		end
 	end
 	if not note and #missing > 0 then

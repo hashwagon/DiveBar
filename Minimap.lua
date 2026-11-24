@@ -24,11 +24,10 @@ function DiveBar:CreateMinimap()
 	button:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
 
 	local icon = button:CreateTexture(nil, "ARTWORK")
-	-- The tracking ring is a circle. A 20px square's corners cross that ring.
-	icon:SetSize(14, 14)
-	icon:SetPoint("CENTER", 0, 0)
-	icon:SetTexture("Interface\\Icons\\Spell_Frost_FrostBolt02")
-	icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+	-- The art is round, so it can fill the tracking ring's 20px hole.
+	icon:SetSize(20, 20)
+	icon:SetPoint("TOPLEFT", 7, -5)
+	icon:SetTexture("Interface\\AddOns\\DiveBar\\DiveBarMinimap")
 	local border = button:CreateTexture(nil, "OVERLAY")
 	border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
 	border:SetSize(54, 54)

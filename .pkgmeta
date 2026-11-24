@@ -8,3 +8,4 @@ ignore:
   - AGENTS.md
   - README.md
   - deploy.sh
+  - media

@@ -2,8 +2,6 @@
 
 DiveBar = DiveBar or {}
 
-DiveBar.VERSION = "1.1.0"
-
 -- Top to bottom. Timers sit under the cast bar. Experience is the anchor.
 DiveBar.FEATURE_LIST = { "cast", "timers", "swings", "xp" }
 

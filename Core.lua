@@ -5,6 +5,9 @@ DiveBar = DiveBar or {}
 
 local ADDON = "DiveBar"
 
+local GetMetadata = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
+DiveBar.VERSION = (GetMetadata and GetMetadata(ADDON, "Version")) or "?"
+
 -- If Forever still refuses a call, keep the function name on the saved data.
 local blocked = CreateFrame("Frame")
 blocked:RegisterEvent("ADDON_ACTION_FORBIDDEN")
