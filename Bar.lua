@@ -1322,25 +1322,49 @@ function DiveBar:Present(bar, state, opts)
 	end
 end
 
+function DiveBar:PreviewWidth()
+	local width = self.profile.width
+	local limit = 620
+	if self.previewHolder and self.previewHolder:GetWidth() and self.previewHolder:GetWidth() > 80 then
+		limit = self.previewHolder:GetWidth() - 8
+	end
+	limit = limit - self:ChromeSide(self.profile, self:Theme()) * 2
+	if width > limit then
+		width = limit
+	end
+	return width
+end
+
+-- The demo moves the preview every frame. Its rows stay put, but the cast icon
+-- comes and goes, and that needs a full layout.
+function DiveBar:PaintPreview()
+	if not self.preview or not self.profile or not self.options or not self.options:IsShown() then
+		return
+	end
+	local sample = self:SampleState()
+	local key = self:LayoutKey(sample)
+	if key ~= self.previewLayoutKey then
+		self.previewLayoutKey = key
+		self:Present(self.preview, sample, { width = self:PreviewWidth(), preview = true })
+		return
+	end
+	self:Paint(self.preview, sample, self:Theme(), self.profile, self:PreviewWidth())
+end
+
 function DiveBar:Refresh()
 	if self.refreshing or not self.bar or not self.profile then
 		return
 	end
 	self.refreshing = true
 	self.OpenIntro(self.profile)
+	if self.playerReady and self.Demoing(self.profile) and self.RequestTick then
+		self:RequestTick()
+	end
 	self:Present(self.bar, self:BuildState(), { anchor = true })
 	if self.preview then
-		local previewWidth = self.profile.width
-		local limit = 620
-		if self.previewHolder and self.previewHolder:GetWidth() and self.previewHolder:GetWidth() > 80 then
-			limit = self.previewHolder:GetWidth() - 8
-		end
-		limit = limit - self:ChromeSide(self.profile, self:Theme()) * 2
-		if previewWidth > limit then
-			previewWidth = limit
-		end
 		local sample = self:SampleState()
-		self:Present(self.preview, sample, { width = previewWidth, preview = true })
+		self.previewLayoutKey = self:LayoutKey(sample)
+		self:Present(self.preview, sample, { width = self:PreviewWidth(), preview = true })
 		self.previewEmpty = not (sample.showCast or #sample.swings > 0 or #sample.timers > 0 or sample.xp)
 		if self.FitPreview then
 			self:FitPreview()

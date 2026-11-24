@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Until the first lock, the bars play a demo that alternates a mage casting Frostbolt with a warrior swinging a two-hander and weaving in Slam, while experience fills every 20 seconds. Rows fold away between casts and fights as they do in real use. Real casts and swings show instead.
+- Options: Play demo, on the Preview heading, runs the same demo on the bars and in the preview.
+
 ## 1.3.1
 
 - Rounded corners: the background follows the curve of the border and stops under its silver line, so see-through backgrounds no longer show square corners or darker edges.

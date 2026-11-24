@@ -50,6 +50,7 @@ DiveBar.DEFAULTS = {
 	order = { "cast", "timers", "swings", "xp" },
 	anchor = "xp",
 	alwaysShow = false,
+	demo = false,
 	cast = true,
 	blizzCast = false,
 	showIcon = true,
@@ -345,7 +346,7 @@ function DiveBar.Sanitize(profile)
 	end
 	local flags = {
 		"lock", "showIcon", "showName", "showTime", "showLatency",
-		"cast", "timers", "swings", "swingMelee", "swingRanged", "xp", "showQuestXP", "showXPRate", "consolidate", "alwaysShow",
+		"cast", "timers", "swings", "swingMelee", "swingRanged", "xp", "showQuestXP", "showXPRate", "consolidate", "alwaysShow", "demo",
 		"blizzCast", "blizzTimers", "blizzSwings", "blizzXp", "roundedCorners",
 	}
 	for i = 1, #flags do
@@ -541,14 +542,20 @@ function DiveBar.SetLockState(profile, locked)
 	end
 end
 
+-- The demo loop plays before the first lock, and whenever Play demo is on.
+-- It folds rows the same way real use does, so it doesn't force them all up.
+function DiveBar.Demoing(profile)
+	return type(profile) == "table" and (profile.demo or DiveBar.FirstRun(profile)) and true or false
+end
+
 function DiveBar.ShowAll(profile)
-	return DiveBar.FirstRun(profile) or profile.alwaysShow
+	return profile.alwaysShow and true or false
 end
 
 -- A swing row appears when that swing starts. It stays through the rest of
 -- combat, including the empty reset between swings. After combat it stays
 -- only until the current swing resets, then it drops.
--- Always show, and the placement preview, keep every equipped row up.
+-- Always show keeps every equipped row up.
 function DiveBar.ShownSwings(profile, equipped, running, inCombat, held)
 	local rows = DiveBar.VisibleRows(profile, equipped)
 	if DiveBar.ShowAll(profile) then

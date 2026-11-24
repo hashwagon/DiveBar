@@ -150,21 +150,27 @@ function DiveBar:PollCast()
 	return false
 end
 
-function DiveBar:PreviewIcon()
-	if self.previewIcon then
-		return self.previewIcon
+DiveBar.spellIcons = DiveBar.spellIcons or {}
+
+function DiveBar:SpellIcon(spellID, fallback)
+	if self.spellIcons[spellID] then
+		return self.spellIcons[spellID]
 	end
 	local icon
 	if C_Spell and C_Spell.GetSpellInfo then
-		local info = C_Spell.GetSpellInfo(116)
+		local info = C_Spell.GetSpellInfo(spellID)
 		icon = info and (info.iconID or info.originalIconID)
 	end
 	if not icon and GetSpellInfo then
-		local _, _, spellIcon = GetSpellInfo(116)
+		local _, _, spellIcon = GetSpellInfo(spellID)
 		icon = spellIcon
 	end
-	self.previewIcon = icon or "Interface\\Icons\\Spell_Frost_FrostBolt02"
-	return self.previewIcon
+	self.spellIcons[spellID] = icon or fallback
+	return self.spellIcons[spellID]
+end
+
+function DiveBar:PreviewIcon()
+	return self:SpellIcon(116, "Interface\\Icons\\Spell_Frost_FrostBolt02")
 end
 
 -- The preview tick boxes last for the session. A bar that is turned off never previews.
@@ -207,7 +213,7 @@ function DiveBar:SampleState()
 	end
 	local duration = 3
 	local showCast = self:PreviewShows("cast") and true or false
-	return {
+	local sample = {
 		mode = showCast and "cast" or "idle",
 		name = "Frostbolt",
 		icon = self:PreviewIcon(),
@@ -228,6 +234,12 @@ function DiveBar:SampleState()
 		xp = xp,
 		xpBadge = xpBadge,
 	}
+	if self.Demoing(profile) then
+		sample.mode = "idle"
+		sample.progress = 0
+		self:PlayDemo(sample, GetTime(), { cast = showCast, melee = swings[1] == "melee", xp = xp ~= nil, noTimers = true })
+	end
+	return sample
 end
 
 function DiveBar:BuildState()
@@ -325,7 +337,7 @@ function DiveBar:BuildState()
 		xp = self.xp
 		xpBadge = self:XPBadgeText()
 	end
-	return {
+	local state = {
 		mode = cast.mode,
 		name = cast.name,
 		icon = cast.icon,
@@ -346,10 +358,120 @@ function DiveBar:BuildState()
 		xp = xp,
 		xpBadge = xpBadge,
 	}
+	if self.Demoing(profile) then
+		self:PlayDemo(state, now, { cast = profile.cast, melee = profile.swings and profile.swingMelee, xp = profile.xp })
+	end
+	return state
+end
+
+-- Until the first lock, or with Play demo on, the bar plays a short script:
+-- a mage casting Frostbolt with no swings, then a warrior swinging a two-hander
+-- and weaving in Slam. Rows fold away between them as in real use. Experience
+-- fills the whole time. Real casts and swings play instead.
+local DEMO_XP = 20
+local DEMO_LEVEL_TIME = 4 * 3600
+local FROSTBOLT = { id = 116, name = "Frostbolt", icon = "Interface\\Icons\\Spell_Frost_FrostBolt02", time = 3 }
+local SLAM = { id = 1464, name = "Slam", icon = "Interface\\Icons\\Ability_Warrior_DecisiveStrike", time = 1.5 }
+local MAGE_CASTS = 3
+local MAGE_REST = 2
+local MAGE = MAGE_CASTS * (FROSTBOLT.time + MAGE_REST)
+local SWING = 3.3
+-- Slam starts as a swing lands. The swing timer waits through the cast and restarts after it.
+local WARRIOR_STEPS = { "swing", "slam", "swing", "swing", "slam", "swing" }
+local WARRIOR_REST = 2
+
+local function StepLength(step)
+	return step == "slam" and SLAM.time or SWING
+end
+
+local WARRIOR = 0
+for i = 1, #WARRIOR_STEPS do
+	WARRIOR = WARRIOR + StepLength(WARRIOR_STEPS[i])
+end
+local DEMO_LOOP = MAGE + WARRIOR + WARRIOR_REST
+
+-- Where the script is: the spell being cast and how far, and the swing if the warrior is fighting.
+local function DemoMoment(elapsed)
+	local t = elapsed % DEMO_LOOP
+	if t < MAGE then
+		local into = t % (FROSTBOLT.time + MAGE_REST)
+		if into < FROSTBOLT.time then
+			return FROSTBOLT, into
+		end
+		return nil
+	end
+	t = t - MAGE
+	if t >= WARRIOR then
+		return nil
+	end
+	for i = 1, #WARRIOR_STEPS do
+		local length = StepLength(WARRIOR_STEPS[i])
+		if t < length then
+			if WARRIOR_STEPS[i] == "slam" then
+				return SLAM, t, 0
+			end
+			return nil, nil, t / SWING
+		end
+		t = t - length
+	end
+	return nil
+end
+
+-- opts.cast: the cast row may play. opts.melee: the melee row may play.
+-- opts.xp: show experience. opts.noTimers: drop the timer rows.
+function DiveBar:PlayDemo(state, now, opts)
+	local profile = self.profile
+	if not self.demoStart then
+		self.demoStart = now
+	end
+	local elapsed = now - self.demoStart
+	local spell, into, swing = DemoMoment(elapsed)
+	if spell and opts.cast and state.mode == "idle" then
+		state.showCast = true
+		state.mode = "cast"
+		state.name = spell.name
+		state.icon = self:SpellIcon(spell.id, spell.icon)
+		state.progress = into / spell.time
+		state.remain = spell.time - into
+		state.total = spell.time
+		state.latency = self:LatencyFraction(spell.time)
+	end
+	local swings = state.swings
+	local hasMelee = false
+	for i = 1, #swings do
+		if swings[i] == "melee" then
+			hasMelee = true
+		end
+	end
+	if opts.melee and not self:SwingInUse("melee") then
+		state.progressSwing.melee = swing or 0
+		if swing and not hasMelee then
+			table.insert(swings, 1, "melee")
+		end
+	end
+	if opts.noTimers then
+		state.timers = {}
+		state.timerProgress = {}
+		state.timerMeta = {}
+	end
+	if opts.xp then
+		local value = (elapsed % DEMO_XP) / DEMO_XP
+		state.xp = { value = value, rested = 0.2 }
+		if profile.showQuestXP ~= false then
+			state.xp.quest = 0.1
+		end
+		if profile.xpLevelTime ~= "off" then
+			state.xpBadge = self.FormatLevelTime((1 - value) * DEMO_LEVEL_TIME, profile.xpBadgeFormat)
+		else
+			state.xpBadge = nil
+		end
+	end
 end
 
 function DiveBar:LayoutKey(state)
-	local parts = { state.showCast and "cast" or "nocast" }
+	-- The cast icon takes room from the trough, so it is part of the layout.
+	local icon = state.showIcon and state.icon and state.mode ~= "idle"
+	local parts = { state.showCast and (icon and "casticon" or "cast") or "nocast" }
 	local timers = state.timers or {}
 	for i = 1, #timers do
 		parts[#parts + 1] = timers[i]
@@ -380,15 +502,24 @@ function DiveBar:InCombat()
 	return self.inCombat and true or false
 end
 
+-- A hidden frame gets no OnUpdate, so the tick runs on its own frame. The bar
+-- can hide between demo casts and still come back.
 function DiveBar:RequestTick()
-	if self.bar and self.OnUpdateFunc then
-		self.bar:SetScript("OnUpdate", self.OnUpdateFunc)
+	if not self.bar or not self.OnUpdateFunc then
+		return
 	end
+	if not self.ticker then
+		self.ticker = CreateFrame("Frame", nil, UIParent)
+	end
+	self.ticker:SetScript("OnUpdate", self.OnUpdateFunc)
 end
 
 function DiveBar:NeedsTick()
 	local cast = self.cast
 	if cast and cast.mode ~= "idle" then
+		return true
+	end
+	if self.profile and self.Demoing(self.profile) then
 		return true
 	end
 	local timers = self.timers
@@ -414,15 +545,18 @@ function DiveBar:Tick(elapsed)
 	local mirrorsChanged = self.PollMirrors and self:PollMirrors()
 	local changed = self:ResolveCast() or self:PollCast()
 	local state = self:BuildState()
-	local watching = self.profile and (not self.profile.alwaysShow or self.FirstRun(self.profile))
+	local watching = self.profile and (not self.profile.alwaysShow or self.Demoing(self.profile))
 	local folded = watching and self:LayoutKey(state) ~= self.layoutKey
 	if changed or folded or mirrorsChanged then
 		self:Refresh()
 	elseif self.bar and self.profile then
 		self:Paint(self.bar, state, self:Theme(), self.profile, self.profile.width)
+		if self.Demoing(self.profile) and self.PaintPreview then
+			self:PaintPreview()
+		end
 	end
-	if not self:NeedsTick() and self.bar then
-		self.bar:SetScript("OnUpdate", nil)
+	if not self:NeedsTick() and self.ticker then
+		self.ticker:SetScript("OnUpdate", nil)
 	end
 end
 

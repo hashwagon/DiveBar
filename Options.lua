@@ -1665,6 +1665,13 @@ function DiveBar:CreateOptions()
 	previewLine:SetPoint("TOPLEFT", 8, -26)
 	previewLine:SetSize(600, 1)
 	ColorTex(previewLine, 1, 0.82, 0, 0.4)
+	local demo = Check(header, "Play demo", function(value)
+		DiveBar.profile.demo = value
+	end, "Loop sample casts, swings and experience on your bars and in this preview, so you can see how each bar behaves.")
+	demo:SetPoint("TOPLEFT", header, "TOPLEFT", 8 + math.ceil(previewLabel:GetStringWidth() or 60) + 20, -4)
+	demo.Refresh = function()
+		demo:SetChecked(DiveBar.profile.demo)
+	end
 	self.previewChecks = {}
 	for n = 1, #DiveBar.FEATURE_LIST do
 		local feature = DiveBar.FEATURE_LIST[n]
