@@ -35,6 +35,14 @@ local function ColorTex(texture, r, g, b, a)
 	end
 end
 
+local function HasAtlas(name)
+	if not (C_Texture and C_Texture.GetAtlasInfo) then
+		return false
+	end
+	local info = C_Texture.GetAtlasInfo(name)
+	return info ~= nil and (info.width or 0) > 0
+end
+
 local function GoldLabel(parent, text, size)
 	local object = (size and size >= 16) and "GameFontNormalLarge" or "GameFontNormal"
 	local font = parent:CreateFontString(nil, "OVERLAY", object)
@@ -409,10 +417,17 @@ end
 local PREVIEW_TOP = 34
 local PREVIEW_BOTTOM = 6
 
-local SLIDER_W = 270
-local THUMB_W = 32
+-- Compact layout. Sections lay out SECTION_W wide from x = 8; two columns of
+-- controls sit at COL1 and COL2. The window width is derived from SECTION_W, so
+-- the whole panel resizes by changing these in one place.
+local SECTION_W = 430
+local COL1 = 8
+local COL2 = 226
+
+local SLIDER_W = 204
+local THUMB_W = 20
 local ARROW_W = 24
-local FIELD_W = 64
+local FIELD_W = 52
 local SLIDER_GAP = 2
 
 local function StepButton(parent, previous)
@@ -520,9 +535,10 @@ local function Slider(parent, text, low, high, step, get, apply, format)
 		slider:SetBackdropColor(1, 1, 1, 1)
 		slider:SetBackdropBorderColor(1, 1, 1, 1)
 	end
-	-- The groove starts inside the left cap. The fill ends at the thumb center,
-	-- so a full slider meets the button and a minimum slider stays empty.
+	-- The groove is clear inside its end caps. The fill spans that inner run by
+	-- value, so a full slider reaches the right cap and a minimum slider stays empty.
 	local fillStart = 6
+	local fillEnd = 6
 	local fill = slider:CreateTexture(nil, "BACKGROUND", nil, 1)
 	fill:SetColorTexture(1, 0.78, 0.15, 1)
 	fill:SetHeight(4)
@@ -538,14 +554,19 @@ local function Slider(parent, text, low, high, step, get, apply, format)
 			ratio = 1
 		end
 		fill:ClearAllPoints()
-		if ratio <= 0 or not thumb then
+		-- Measure the groove itself so the fill tracks the value, not the thumb
+		-- art. A full value reaches the right cap; an empty one shows nothing.
+		local track = slider:GetWidth() or trackW
+		local run = track - fillStart - fillEnd
+		if run < 0 then
+			run = 0
+		end
+		local width = run * ratio
+		if width <= 0 then
 			fill:Hide()
 		else
-			-- The button's art sits inside a wider texture. Ending the fill on
-			-- that center meets the button at the top of the slider, and stays
-			-- empty at the bottom instead of leaving a stub past the cap.
 			fill:SetPoint("LEFT", slider, "LEFT", fillStart, 0)
-			fill:SetPoint("RIGHT", thumb, "CENTER", 0, 0)
+			fill:SetWidth(width)
 			fill:SetHeight(4)
 			fill:Show()
 		end
@@ -735,7 +756,7 @@ function DiveBar:LayoutOptions()
 			host:ClearAllPoints()
 			host:SetPoint("TOPLEFT", body, "TOPLEFT", 0, y)
 			host:SetPoint("TOPRIGHT", body, "TOPRIGHT", 0, y)
-			y = y - (host:GetHeight() or 0) - 8
+			y = y - (host:GetHeight() or 0) - 6
 		end
 	end
 	local height = -y + 4
@@ -755,7 +776,7 @@ function DiveBar:BuildOptionSections(body)
 		font:SetPoint("TOPLEFT", 8, y)
 		local line = parent:CreateTexture(nil, "ARTWORK")
 		line:SetPoint("TOPLEFT", 8, y - 18)
-		line:SetSize(600, 1)
+		line:SetSize(SECTION_W, 1)
 		ColorTex(line, 1, 0.82, 0, 0.4)
 		return y - 32
 	end
@@ -769,14 +790,14 @@ function DiveBar:BuildOptionSections(body)
 
 	local function PaddingSlider(host, feature, y)
 		local key = DiveBar.PADDING_KEY[feature]
-		local slider = Slider(host, "Padding", 0, 20, 1, function()
+		local slider = Slider(host, "Vertical padding", 0, 20, 1, function()
 			return DiveBar.profile[key]
 		end, function(value)
 			DiveBar.profile[key] = math.floor(value + 0.5)
 		end, function(value)
 			return tostring(math.floor(value + 0.5))
 		end)
-		slider:SetPoint("TOPLEFT", 310, y)
+		slider:SetPoint("TOPLEFT", COL2, y)
 		return slider
 	end
 
@@ -818,16 +839,16 @@ function DiveBar:BuildOptionSections(body)
 		enable.Refresh = function()
 			enable:SetChecked(DiveBar.profile[feature])
 		end
-		local blizz = Check(row, "Show Blizzard bar", function(value)
+		local blizz = Check(row, "Blizzard", function(value)
 			DiveBar.profile[flag] = value
 			DiveBar:ApplySuppression()
 		end, "Keep the game's default bar visible as well. When unchecked, Dive Bar hides it.")
-		blizz:SetPoint("TOPLEFT", 200, -2)
+		blizz:SetPoint("TOPLEFT", 124, -2)
 		blizz.Refresh = function()
 			blizz:SetChecked(DiveBar.profile[flag])
 		end
-		local anchor = Button(row, "Anchor", 100)
-		anchor:SetPoint("TOPLEFT", 372, -4)
+		local anchor = Button(row, "Anchor", 72)
+		anchor:SetPoint("TOPLEFT", 214, -4)
 		anchor:SetScript("OnClick", function()
 			if not DiveBar.profile[feature] or DiveBar.profile.anchor == feature then
 				return
@@ -836,13 +857,13 @@ function DiveBar:BuildOptionSections(body)
 			DiveBar:Refresh()
 		end)
 		Tooltip(anchor, "Anchor", "This bar stays in place. The other bars stack above and below it.")
-		local up = Button(row, "Up", 40)
-		up:SetPoint("TOPLEFT", 478, -4)
+		local up = Button(row, "Up", 36)
+		up:SetPoint("TOPLEFT", 292, -4)
 		up:SetScript("OnClick", function()
 			DiveBar.MoveFeature(DiveBar.profile, feature, -1)
 			DiveBar:Refresh()
 		end)
-		local down = Button(row, "Down", 52)
+		local down = Button(row, "Down", 46)
 		down:SetPoint("LEFT", up, "RIGHT", 4, 0)
 		down:SetScript("OnClick", function()
 			DiveBar.MoveFeature(DiveBar.profile, feature, 1)
@@ -853,7 +874,7 @@ function DiveBar:BuildOptionSections(body)
 			local on = DiveBar.profile[feature] and true or false
 			local selected = DiveBar.profile.anchor == feature
 			anchor:SetText(selected and "Anchored" or "Anchor")
-			anchor:SetWidth(100)
+			anchor:SetWidth(72)
 			anchor:SetButtonEnabled(on and not selected)
 			up:SetButtonEnabled(index > 1)
 			down:SetButtonEnabled(index < count)
@@ -872,7 +893,7 @@ function DiveBar:BuildOptionSections(body)
 	y = y - 30
 	local blizzNote = Cream(features, "")
 	blizzNote:SetPoint("TOPLEFT", 8, y)
-	blizzNote:SetWidth(600)
+	blizzNote:SetWidth(SECTION_W)
 	blizzNote:Hide()
 	self.blizzNoteText = blizzNote
 	self.featuresBase = -y + 8
@@ -884,8 +905,8 @@ function DiveBar:BuildOptionSections(body)
 	local themeDrop = Dropdown(look, 180, function()
 		return {
 			{ "Forever", "Forever" },
-			{ "Flat", "Flat" },
 			{ "Classic", "Classic" },
+			{ "Flat", "Flat" },
 		}
 	end, function()
 		return DiveBar.profile.theme
@@ -911,7 +932,7 @@ function DiveBar:BuildOptionSections(body)
 	end, function(value)
 		return tostring(math.floor(value + 0.5))
 	end)
-	marginSlider:SetPoint("TOPLEFT", 310, y)
+	marginSlider:SetPoint("TOPLEFT", COL2, y)
 	y = y - 58
 	local scaleSlider = Slider(look, "Scale", 0.5, 2, 0.05, function()
 		return DiveBar.profile.scale
@@ -928,7 +949,7 @@ function DiveBar:BuildOptionSections(body)
 	end, function(value)
 		return tostring(math.floor(value * 100 + 0.5)) .. "%"
 	end)
-	opacitySlider:SetPoint("TOPLEFT", 310, y)
+	opacitySlider:SetPoint("TOPLEFT", COL2, y)
 	y = y - 58
 	local textSlider = Slider(look, "Text size", 8, 24, 1, function()
 		return DiveBar.profile.textSize
@@ -945,7 +966,17 @@ function DiveBar:BuildOptionSections(body)
 	end, function(value)
 		return string.format("%.1f", value)
 	end)
-	borderSlider:SetPoint("TOPLEFT", 310, y)
+	borderSlider:SetPoint("TOPLEFT", COL2, y)
+	y = y - 58
+	local hPadSlider = Slider(look, "Horizontal padding", 0, 40, 1, function()
+		return DiveBar.profile.hPadding
+	end, function(value)
+		DiveBar.profile.hPadding = math.floor(value + 0.5)
+	end, function(value)
+		return tostring(math.floor(value + 0.5))
+	end)
+	hPadSlider:SetPoint("TOPLEFT", 8, y)
+	Help(hPadSlider, "Horizontal padding", "Room between the bars and the left and right border.")
 	y = y - 58
 	local lock = Check(look, "Lock", function(value)
 		DiveBar:SetLocked(value)
@@ -1172,9 +1203,9 @@ function DiveBar:BuildOptionSections(body)
 		return button
 	end
 	self.colorMelee = Swatch("melee", "Melee", 8)
-	self.colorOff = Swatch("off", "Off hand", 148)
-	self.colorShot = Swatch("shot", "Ranged", 300)
-	self.colorWand = Swatch("wand", "Wand", 450)
+	self.colorOff = Swatch("off", "Off hand", 118)
+	self.colorShot = Swatch("shot", "Ranged", 228)
+	self.colorWand = Swatch("wand", "Wand", 338)
 	y = y - 36
 	swingHost:SetHeight(-y + 4)
 
@@ -1205,12 +1236,12 @@ function DiveBar:BuildOptionSections(body)
 		DiveBar.profile.showXPRate = value
 		DiveBar:RefreshXPTooltip()
 	end, "Adds session XP, XP per hour, time to level and kills to level.")
-	xpRate:SetPoint("TOPLEFT", 306, y)
+	xpRate:SetPoint("TOPLEFT", COL2, y)
 	xpRate.Refresh = function()
 		xpRate:SetChecked(DiveBar.profile.showXPRate)
 	end
 	y = y - 34
-	local styleDrop = Dropdown(xpHost, 140, function()
+	local styleDrop = Dropdown(xpHost, 150, function()
 		return {
 			{ "badge", "Badge" },
 			{ "text", "Text" },
@@ -1225,6 +1256,7 @@ function DiveBar:BuildOptionSections(body)
 	styleLabel:SetPoint("TOPLEFT", 8, y - 4)
 	styleDrop:SetPoint("LEFT", styleLabel, "RIGHT", 12, 0)
 	Help(styleDrop, "Time to level", "Estimated time to level, shown where your experience ends. Shows an infinity sign until you earn XP this session.")
+	y = y - 32
 	local formatDrop = Dropdown(xpHost, 200, function()
 		return {
 			{ "decimal", "Decimal (2.6h)" },
@@ -1236,7 +1268,7 @@ function DiveBar:BuildOptionSections(body)
 		DiveBar.profile.xpBadgeFormat = value
 	end)
 	local formatLabel = Cream(xpHost, "Format")
-	formatLabel:SetPoint("TOPLEFT", 310, y - 4)
+	formatLabel:SetPoint("TOPLEFT", 8, y - 4)
 	formatDrop:SetPoint("LEFT", formatLabel, "RIGHT", 12, 0)
 	self.xpBadgeFormat = formatDrop
 	self.xpBadgeFormatLabel = formatLabel
@@ -1257,7 +1289,7 @@ function DiveBar:BuildOptionSections(body)
 	end, function(value)
 		return tostring(math.floor(value + 0.5))
 	end)
-	levelSize:SetPoint("TOPLEFT", 310, y)
+	levelSize:SetPoint("TOPLEFT", COL2, y)
 	Help(levelSize, "Badge padding", "Room around the time inside the badge. Lower it to keep large text in a snug badge.")
 	self.xpLevelTimeSize = levelSize
 	y = y - 58
@@ -1268,7 +1300,7 @@ function DiveBar:BuildOptionSections(body)
 	y = Header(profiles, "Profiles", -4)
 	local currentLabel = Cream(profiles, "Profile")
 	currentLabel:SetPoint("TOPLEFT", 8, y)
-	local current = Dropdown(profiles, 200, function()
+	local current = Dropdown(profiles, 170, function()
 		local items = {}
 		local names = DiveBar:ProfileNames()
 		for i = 1, #names do
@@ -1346,8 +1378,9 @@ function DiveBar:BuildOptionSections(body)
 		nameBox:ClearFocus()
 	end)
 	Tooltip(newButton, "New profile", "Saves the current settings under the typed name and switches to it.")
+	y = y - 30
 	local copyLabel = Cream(profiles, "Copy from")
-	copyLabel:SetPoint("LEFT", newButton, "RIGHT", 16, 0)
+	copyLabel:SetPoint("TOPLEFT", 8, y)
 	self.copyName = self.profileName
 	local copyDrop = Dropdown(profiles, 140, function()
 		local items = {}
@@ -1389,14 +1422,14 @@ function DiveBar:LayoutPreviewChecks()
 		return
 	end
 	local order = self.OrderedFeatures(self.profile)
-	local right = 608
+	local right = SECTION_W + 8
 	for i = #order, 1, -1 do
 		local check = checks[order[i]]
 		if check then
 			local left = right - math.ceil(check.label:GetStringWidth() or 0) - 2 - 24
 			check:ClearAllPoints()
 			check:SetPoint("TOPLEFT", header, "TOPLEFT", left, -4)
-			right = left - 14
+			right = left - 10
 		end
 	end
 end
@@ -1410,11 +1443,14 @@ function DiveBar:FitPreview()
 		return
 	end
 	local empty = self.previewEmpty and true or false
-	bar:SetShown(not empty)
+	if empty then
+		bar:Hide()
+	end
 	if self.previewEmptyText then
 		self.previewEmptyText:SetShown(empty)
 	end
-	local height = empty and 16 or (bar:GetHeight() or 0)
+	-- Sized by the full layout, never by whatever the demo has folded it to.
+	local height = empty and 16 or (self.previewFullHeight or bar:GetHeight() or 0)
 	if height < 8 then
 		height = 8
 	end
@@ -1448,7 +1484,9 @@ function DiveBar:CreateOptions()
 		panel = (ok and created) or CreateFrame("Frame", "DiveBarOptions", UIParent)
 	end
 	self.options = panel
-	panel:SetSize(720, 660)
+	-- Sized to sit alongside the game's own panels (Looking For Group and the
+	-- like). The sections scroll, so a shorter frame just shows fewer at once.
+	panel:SetSize(720, 506)
 	panel:SetFrameStrata("DIALOG")
 	panel:SetClampedToScreen(true)
 	panel:SetMovable(true)
@@ -1537,8 +1575,8 @@ function DiveBar:CreateOptions()
 		contentLeft, contentTop, contentRight, contentBottom = 14, -34, -32, 16
 		if portraitShown then
 			-- The portrait hangs about 60px into the frame and would cover the Preview heading.
-			contentTop = -60
-			panel:SetHeight(panel:GetHeight() + 26)
+			contentTop = -52
+			panel:SetHeight(panel:GetHeight() + 18)
 		end
 	else
 		if panel.SetBackdrop then
@@ -1563,19 +1601,50 @@ function DiveBar:CreateOptions()
 		end
 		contentLeft, contentTop, contentRight, contentBottom = 22, -42, -40, 20
 	end
-	-- Sections lay out 600 wide from x = 8, so this leaves the same 8px on the right.
-	panel:SetWidth(616 + contentLeft - contentRight)
+	-- Sections lay out SECTION_W wide from x = 8, leaving the same 8px on the right.
+	panel:SetWidth(SECTION_W + 16 + contentLeft - contentRight)
 
-	ok, created = pcall(CreateFrame, "ScrollFrame", "DiveBarOptionsScroll", panel, "UIPanelScrollFrameTemplate")
-	local scroll = (ok and created) or CreateFrame("ScrollFrame", "DiveBarOptionsScroll", panel)
-	local templatedScroll = _G.DiveBarOptionsScrollScrollBar ~= nil
+	-- The game's minimal scroll bar, as the Looking For Group list draws it, where the client has it.
+	-- Why it fell back, if it did: /dump DiveBar.scrollFallback
+	local scroll, scrollBar, minimalScroll
+	if not (ScrollUtil and type(ScrollUtil.InitScrollFrameWithScrollBar) == "function") then
+		self.scrollFallback = "no ScrollUtil.InitScrollFrameWithScrollBar"
+	else
+		local barOk, bar = pcall(CreateFrame, "EventFrame", nil, panel, "MinimalScrollBar")
+		if not (barOk and bar) then
+			self.scrollFallback = "MinimalScrollBar: " .. tostring(bar)
+		else
+			local frame = CreateFrame("ScrollFrame", nil, panel)
+			local initOk, initErr = pcall(ScrollUtil.InitScrollFrameWithScrollBar, frame, bar)
+			if initOk then
+				scroll, scrollBar, minimalScroll = frame, bar, true
+			else
+				self.scrollFallback = "InitScrollFrameWithScrollBar: " .. tostring(initErr)
+				frame:Hide()
+				bar:Hide()
+			end
+		end
+	end
+	if not minimalScroll then
+		ok, created = pcall(CreateFrame, "ScrollFrame", "DiveBarOptionsScroll", panel, "UIPanelScrollFrameTemplate")
+		scroll = (ok and created) or CreateFrame("ScrollFrame", "DiveBarOptionsScroll", panel)
+		scrollBar = _G.DiveBarOptionsScrollScrollBar
+	end
+	local templatedScroll = not minimalScroll and scrollBar ~= nil
 	scroll:SetPoint("TOPLEFT", panel, "TOPLEFT", contentLeft, contentTop)
 	scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", contentRight, contentBottom)
 	local content = CreateFrame("Frame", nil, scroll)
-	content:SetWidth(640)
+	content:SetWidth(SECTION_W + 16)
 	scroll:SetScrollChild(content)
 
-	local scrollBar = _G.DiveBarOptionsScrollScrollBar
+	if minimalScroll then
+		scrollBar:SetPoint("TOPLEFT", scroll, "TOPRIGHT", 4, -10)
+		scrollBar:SetPoint("BOTTOMLEFT", scroll, "BOTTOMRIGHT", 4, 8)
+		scroll:HookScript("OnScrollRangeChanged", function(_, _, yRange)
+			scrollBar:SetShown((yRange or 0) >= 1)
+		end)
+	end
+
 	local function UpdateScroll()
 		local width = scroll:GetWidth()
 		if width and width > 200 then
@@ -1583,6 +1652,10 @@ function DiveBar:CreateOptions()
 		end
 		if scroll.UpdateScrollChildRect then
 			scroll:UpdateScrollChildRect()
+		end
+		if minimalScroll then
+			scrollBar:SetShown((scroll:GetVerticalScrollRange() or 0) >= 1)
+			return
 		end
 		if templatedScroll or not scrollBar then
 			return
@@ -1599,7 +1672,7 @@ function DiveBar:CreateOptions()
 			scrollBar:Show()
 		end
 	end
-	if not templatedScroll then
+	if not templatedScroll and not minimalScroll then
 		local barOk, bar = pcall(CreateFrame, "Slider", nil, scroll, "UIPanelScrollBarTemplate")
 		if not barOk or not bar then
 			bar = CreateFrame("Slider", nil, scroll)
@@ -1623,9 +1696,10 @@ function DiveBar:CreateOptions()
 		end)
 	end
 	scroll:EnableMouseWheel(true)
+	local slider = not minimalScroll and scrollBar and scrollBar.GetValue and scrollBar.SetValue
 	scroll:SetScript("OnMouseWheel", function(self, delta)
 		local current, maxValue
-		if scrollBar and scrollBar.GetValue then
+		if slider then
 			current = scrollBar:GetValue()
 			local _
 			_, maxValue = scrollBar:GetMinMaxValues()
@@ -1639,7 +1713,7 @@ function DiveBar:CreateOptions()
 		elseif nextValue > maxValue then
 			nextValue = maxValue
 		end
-		if scrollBar and scrollBar.SetValue then
+		if slider then
 			scrollBar:SetValue(nextValue)
 		else
 			self:SetVerticalScroll(nextValue)
@@ -1657,14 +1731,41 @@ function DiveBar:CreateOptions()
 	if modernFrame then
 		bgInset, bgTop = 2, -21
 	end
-	headerBG:SetPoint("TOPLEFT", panel, "TOPLEFT", bgInset, bgTop)
-	headerBG:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", -contentRight - bgInset, 0)
-	ColorTex(headerBG, 0, 0, 0, 0.5)
+	-- The Looking For Group window's own art: its dark header, and the body inset with
+	-- its background and the gilded inside frame. Placed as LFGListingFrame places them.
+	local lfgArt = modernFrame and HasAtlas("groupfinder-roles-background")
+		and HasAtlas("groupfinder-background") and HasAtlas("common-insideframe")
+	if lfgArt then
+		local inset = CreateFrame("Frame", nil, panel)
+		inset:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 4 - contentLeft, 0)
+		inset:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -4, 3)
+		local insetBG = inset:CreateTexture(nil, "BACKGROUND")
+		insetBG:SetAtlas("groupfinder-background")
+		insetBG:SetPoint("TOPLEFT", 2, -3)
+		insetBG:SetPoint("BOTTOMRIGHT", -1, 3)
+		local insetBorder = inset:CreateTexture(nil, "BORDER")
+		insetBorder:SetAtlas("common-insideframe")
+		insetBorder:SetPoint("TOPLEFT", 0, -1)
+		insetBorder:SetPoint("BOTTOMRIGHT", 0, 0)
+		headerBG:SetAtlas("groupfinder-roles-background")
+		headerBG:SetPoint("TOPLEFT", panel, "TOPLEFT", 2, -25)
+		headerBG:SetPoint("BOTTOMRIGHT", inset, "TOPRIGHT", 2, -9)
+		-- Over the inset, not beside it, so the settings draw on its background.
+		scroll:SetParent(inset)
+		if scrollBar then
+			scrollBar:SetParent(inset)
+		end
+		contentBottom = 9
+	else
+		headerBG:SetPoint("TOPLEFT", panel, "TOPLEFT", bgInset, bgTop)
+		headerBG:SetPoint("BOTTOMRIGHT", header, "BOTTOMRIGHT", -contentRight - bgInset, 0)
+		ColorTex(headerBG, 0, 0, 0, 0.5)
+	end
 	local previewLabel = GoldLabel(header, "Preview", 16)
 	previewLabel:SetPoint("TOPLEFT", 8, -8)
 	local previewLine = header:CreateTexture(nil, "ARTWORK")
 	previewLine:SetPoint("TOPLEFT", 8, -26)
-	previewLine:SetSize(600, 1)
+	previewLine:SetSize(SECTION_W, 1)
 	ColorTex(previewLine, 1, 0.82, 0, 0.4)
 	local demo = Check(header, "Play demo", function(value)
 		DiveBar.profile.demo = value
@@ -1674,9 +1775,11 @@ function DiveBar:CreateOptions()
 		demo:SetChecked(DiveBar.profile.demo)
 	end
 	self.previewChecks = {}
+	-- Short labels keep all four toggles on the one Preview row in the narrow header.
+	local previewLabels = { cast = "Cast", timers = "Timers", swings = "Swings", xp = "XP" }
 	for n = 1, #DiveBar.FEATURE_LIST do
 		local feature = DiveBar.FEATURE_LIST[n]
-		local check = Check(header, DiveBar.FEATURE_LABEL[feature], function(value)
+		local check = Check(header, previewLabels[feature] or DiveBar.FEATURE_LABEL[feature], function(value)
 			DiveBar.previewShow[feature] = value
 		end)
 		check.Refresh = function()

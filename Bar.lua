@@ -902,9 +902,14 @@ function DiveBar:ResolveChrome(contentH, theme)
 	return DiveBar.FitChrome(contentH, theme.borderSize, theme.rim, theme.rounded ~= false)
 end
 
--- What the frame adds on each side of the Width setting: the border inset.
+-- What the frame adds on each side of the Width setting: the border inset plus
+-- any horizontal padding between the bars and that border.
 function DiveBar:ChromeSide(profile, theme)
-	return DiveBar.ContentInset(theme.rim, theme.rounded ~= false)
+	local hpad = tonumber(profile and profile.hPadding) or 0
+	if hpad < 0 then
+		hpad = 0
+	end
+	return DiveBar.ContentInset(theme.rim, theme.rounded ~= false) + hpad
 end
 
 function DiveBar:BlockRow(bar, block)
@@ -958,6 +963,28 @@ function DiveBar:MarkAnchor(bar, blocks, profile)
 	mark:SetHeight(1)
 end
 
+-- How far below the bar's top MarkAnchor's point sits, worked out from the layout
+-- so it can be used before the frame has a position.
+function DiveBar:AnchorDepth(blocks, tops, profile, inset, frameH)
+	local mode, index = self.AnchorMeasure(blocks, self.OrderedFeatures(profile), self.NormalizeAnchor(profile))
+	if mode == "center" then
+		local feature = blocks[index].feature
+		local first, last
+		for i = 1, #blocks do
+			if blocks[i].feature == feature then
+				first = first or tops[i]
+				last = tops[i] + blocks[i].h
+			end
+		end
+		return inset + (first + last) / 2
+	elseif mode == "top" then
+		return inset + tops[index]
+	elseif mode == "bottom" then
+		return inset + tops[index] + blocks[index].h
+	end
+	return frameH / 2
+end
+
 function DiveBar:Place(bar, state, theme, profile, width)
 	local spec = {
 		cast = state.showCast and true or false,
@@ -967,6 +994,10 @@ function DiveBar:Place(bar, state, theme, profile, width)
 	}
 	local blocks = self.Blocks(profile, spec)
 	local margin = profile.margin or 0
+	local hpad = tonumber(profile.hPadding) or 0
+	if hpad < 0 then
+		hpad = 0
+	end
 	local contentH = self.ContentHeight(blocks) + margin * 2
 	if contentH < 1 then
 		contentH = 1
@@ -975,8 +1006,9 @@ function DiveBar:Place(bar, state, theme, profile, width)
 	bar._fitRim = line
 	-- The chrome hugs whatever is actually on screen. The background reaches
 	-- the middle of the silver line and follows its curve in the corners.
-	-- Margin and padding are vertical only, so the bars run into the side border.
-	bar:SetSize(width + inset * 2, frameH)
+	-- Horizontal padding insets the bars from the side border; the frame grows
+	-- to keep the bars at the Width setting.
+	bar:SetSize(width + inset * 2 + hpad * 2, frameH)
 	bar.inner:ClearAllPoints()
 	bar.inner:SetPoint("TOPLEFT", bar, "TOPLEFT", inset, -inset)
 	bar.inner:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", -inset, inset)
@@ -991,13 +1023,15 @@ function DiveBar:Place(bar, state, theme, profile, width)
 	bar.xp:Hide()
 
 	local top = margin
+	local tops = {}
 	for i = 1, #blocks do
 		local block = blocks[i]
+		tops[i] = top
 		local row = self:BlockRow(bar, block)
 		row:Show()
 		row:ClearAllPoints()
-		row:SetPoint("TOPLEFT", bar.inner, "TOPLEFT", 0, -top)
-		row:SetPoint("TOPRIGHT", bar.inner, "TOPRIGHT", 0, -top)
+		row:SetPoint("TOPLEFT", bar.inner, "TOPLEFT", hpad, -top)
+		row:SetPoint("TOPRIGHT", bar.inner, "TOPRIGHT", -hpad, -top)
 		row:SetHeight(block.h)
 		if block.kind == "cast" then
 			self:PlaceCastRow(bar, state, theme, block)
@@ -1008,6 +1042,7 @@ function DiveBar:Place(bar, state, theme, profile, width)
 		end
 		top = top + block.h
 	end
+	bar.anchorDepth = self:AnchorDepth(blocks, tops, profile, inset, frameH)
 	self:MarkAnchor(bar, blocks, profile)
 	self:ApplyEdge(bar, theme)
 end
@@ -1304,7 +1339,8 @@ function DiveBar:PaintLevelTime(bar, row, text, filled, troughW, profile, theme,
 	if textW > contentW then
 		contentW = textW
 	end
-	local width = math.ceil(contentW + padX * 2)
+	-- A touch of extra width (15%) past what the text and padding need, so the time reads in a roomier chip.
+	local width = math.ceil((contentW + padX * 2) * 1.15)
 	if width < 1 then
 		width = 1
 	end
@@ -1473,6 +1509,19 @@ function DiveBar:Present(bar, state, opts)
 		self.layoutKey = self:LayoutKey(state)
 	end
 	local showing = state.showCast or #(state.swings or {}) > 0 or #(state.timers or {}) > 0 or state.xp
+	if opts.preview then
+		-- The full layout sets where the anchor sits; folded layouts keep it there,
+		-- as the bar keeps its anchor on screen.
+		if opts.full or not self.previewAnchorDepth then
+			self.previewAnchorDepth = bar.anchorDepth
+			self.previewFullHeight = bar:GetHeight()
+		end
+		if self.previewHolder then
+			bar:ClearAllPoints()
+			bar:SetPoint("TOP", self.previewHolder, "TOP", 0, -6 - (self.previewAnchorDepth - bar.anchorDepth))
+		end
+		bar:SetShown((showing and not self.previewEmpty) and true or false)
+	end
 	if bar == self.bar and self.playerReady and showing then
 		-- Show before measuring. A hidden frame reports no position, so the anchor never stuck.
 		bar:Show()
@@ -1547,12 +1596,18 @@ function DiveBar:Refresh()
 	end
 	self:Present(self.bar, self:BuildState(), { anchor = true })
 	if self.preview then
-		local sample = self:SampleState()
-		self.previewLayoutKey = self:LayoutKey(sample)
-		self:Present(self.preview, sample, { width = self:PreviewWidth(), preview = true })
-		self.previewEmpty = not (sample.showCast or #sample.swings > 0 or #sample.timers > 0 or sample.xp)
+		-- The preview area is sized with every ticked row up, so it holds still
+		-- while the demo folds rows away inside it.
+		local full = self:SampleState(true)
+		self.previewEmpty = not (full.showCast or #full.swings > 0 or #full.timers > 0 or full.xp)
+		self:Present(self.preview, full, { width = self:PreviewWidth(), preview = true, full = true })
 		if self.FitPreview then
 			self:FitPreview()
+		end
+		local sample = self:SampleState()
+		self.previewLayoutKey = self:LayoutKey(sample)
+		if self.previewLayoutKey ~= self:LayoutKey(full) then
+			self:Present(self.preview, sample, { width = self:PreviewWidth(), preview = true })
 		end
 	end
 	if self.SyncOptions and self.options and self.options:IsShown() then

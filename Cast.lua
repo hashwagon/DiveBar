@@ -180,7 +180,8 @@ function DiveBar:PreviewShows(feature)
 	return self.profile[feature] and self.previewShow[feature] ~= false
 end
 
-function DiveBar:SampleState()
+-- unfolded: every ticked row stays up through the demo, to size the preview area by.
+function DiveBar:SampleState(unfolded)
 	local profile = self.profile
 	local swings = {}
 	local progress = {}
@@ -237,14 +238,42 @@ function DiveBar:SampleState()
 	if self.Demoing(profile) then
 		sample.mode = "idle"
 		sample.progress = 0
-		self:PlayDemo(sample, GetTime(), { cast = showCast, melee = swings[1] == "melee", xp = xp ~= nil, noTimers = true })
+		-- Fold the rows as the bar does; the demo brings each back while it plays.
+		if not unfolded and not self.ShowAll(profile) then
+			sample.showCast = false
+			sample.swings = {}
+			sample.timers = {}
+		elseif #timers > 0 then
+			-- Kept up but empty until the breath timer runs, as the bar's idle row is.
+			sample.timers = { "idle" }
+			sample.timerProgress = { idle = 0 }
+			sample.timerMeta = { idle = { label = "", value = 0, max = 0 } }
+		end
+		local showTimers = #timers > 0
+		self:PlayDemo(sample, GetTime(), { cast = showCast, melee = swings[1] == "melee", timers = showTimers, xp = xp ~= nil })
+	end
+	-- A real cast takes over the preview so it animates and behaves exactly like
+	-- the bar does: same progress, spark, latency shade, time and interrupt flash.
+	-- This wins over the static sample and the demo, just as it does on the bar.
+	if showCast and self.cast and self.cast.mode ~= "idle" then
+		local snap = self:CastSnapshot()
+		sample.mode = snap.mode
+		sample.name = snap.name
+		sample.icon = snap.icon
+		sample.progress = snap.progress
+		sample.remain = snap.remain
+		sample.total = snap.total
+		sample.latency = snap.latency
+		sample.showCast = true
 	end
 	return sample
 end
 
-function DiveBar:BuildState()
+-- The live cast's drawing values, derived once so the preview and the real bar
+-- animate from the exact same numbers. mode/name/icon come straight off the
+-- cast; progress, remain, total and latency are computed the way the bar draws.
+function DiveBar:CastSnapshot()
 	self:EnsureCast()
-	local profile = self.profile
 	local cast = self.cast
 	local now = GetTime()
 	local duration = 0
@@ -271,6 +300,22 @@ function DiveBar:BuildState()
 	elseif progress > 1 then
 		progress = 1
 	end
+	return {
+		mode = cast.mode,
+		name = cast.name,
+		icon = cast.icon,
+		progress = progress,
+		remain = remain,
+		total = duration,
+		latency = cast.mode == "cast" and self:LatencyFraction(duration) or 0,
+	}
+end
+
+function DiveBar:BuildState()
+	self:EnsureCast()
+	local profile = self.profile
+	local now = GetTime()
+	local snap = self:CastSnapshot()
 	local equipped = self.GetVisibleSwingKeys and self:GetVisibleSwingKeys() or {}
 	local consolidate = profile.consolidate ~= false
 	local rangedOn = consolidate and self.RangedActive and self:RangedActive()
@@ -298,7 +343,7 @@ function DiveBar:BuildState()
 	else
 		self.swingHold = nil
 	end
-	local showCast = self.ShowCastRow(profile, cast.mode)
+	local showCast = self.ShowCastRow(profile, snap.mode)
 	local progressSwing = {}
 	for i = 1, #swings do
 		progressSwing[swings[i]] = self:SwingProgress(swings[i])
@@ -338,13 +383,13 @@ function DiveBar:BuildState()
 		xpBadge = self:XPBadgeText()
 	end
 	local state = {
-		mode = cast.mode,
-		name = cast.name,
-		icon = cast.icon,
-		progress = progress,
-		latency = cast.mode == "cast" and self:LatencyFraction(duration) or 0,
-		remain = remain,
-		total = duration,
+		mode = snap.mode,
+		name = snap.name,
+		icon = snap.icon,
+		progress = snap.progress,
+		latency = snap.latency,
+		remain = snap.remain,
+		total = snap.total,
 		showIcon = profile.showIcon,
 		showName = profile.showName,
 		showTime = profile.showTime,
@@ -359,73 +404,78 @@ function DiveBar:BuildState()
 		xpBadge = xpBadge,
 	}
 	if self.Demoing(profile) then
-		self:PlayDemo(state, now, { cast = profile.cast, melee = profile.swings and profile.swingMelee, xp = profile.xp })
+		self:PlayDemo(state, now, { cast = profile.cast, melee = profile.swings and profile.swingMelee, timers = profile.timers, xp = profile.xp })
 	end
 	return state
 end
 
--- Until the first lock, or with Play demo on, the bar plays a short script:
--- a mage casting Frostbolt with no swings, then a warrior swinging a two-hander
--- and weaving in Slam. Rows fold away between them as in real use. Experience
--- fills the whole time. Real casts and swings play instead.
+-- Until the first lock, or with Play demo on, the bar plays a short script, one
+-- of each: a mage casts Frostbolt; a warrior swings a two-hander and weaves a Slam
+-- in as a swing lands, the swing timer running on under it; a breath timer runs
+-- out; then a Hearthstone home. Rows fold away between them as in real use.
+-- Experience fills the whole time. Real casts, swings and timers play instead.
 local DEMO_XP = 20
 local DEMO_LEVEL_TIME = 4 * 3600
 local FROSTBOLT = { id = 116, name = "Frostbolt", icon = "Interface\\Icons\\Spell_Frost_FrostBolt02", time = 3 }
 local SLAM = { id = 1464, name = "Slam", icon = "Interface\\Icons\\Ability_Warrior_DecisiveStrike", time = 1.5 }
-local MAGE_CASTS = 3
-local MAGE_REST = 2
-local MAGE = MAGE_CASTS * (FROSTBOLT.time + MAGE_REST)
+local HEARTHSTONE = { id = 8690, name = "Hearthstone", icon = "Interface\\Icons\\INV_Misc_Rune_01", time = 3 }
 local SWING = 3.3
--- Slam starts as a swing lands. The swing timer waits through the cast and restarts after it.
-local WARRIOR_STEPS = { "swing", "slam", "swing", "swing", "slam", "swing" }
-local WARRIOR_REST = 2
+local SWINGS = 3
+local BREATH_TIME = 3
+local REST = 1
 
-local function StepLength(step)
-	return step == "slam" and SLAM.time or SWING
+-- Each beat of the script, back to back. Slam starts as the first swing lands.
+local FIGHT = SWING * SWINGS
+local BEATS = {
+	{ kind = "cast", spell = FROSTBOLT, length = FROSTBOLT.time },
+	{ kind = "rest", length = REST },
+	{ kind = "fight", length = FIGHT, slamAt = SWING },
+	{ kind = "rest", length = REST },
+	{ kind = "breath", length = BREATH_TIME },
+	{ kind = "rest", length = REST },
+	{ kind = "cast", spell = HEARTHSTONE, length = HEARTHSTONE.time },
+	{ kind = "rest", length = REST * 1.5 },
+}
+local DEMO_LOOP = 0
+for i = 1, #BEATS do
+	DEMO_LOOP = DEMO_LOOP + BEATS[i].length
 end
 
-local WARRIOR = 0
-for i = 1, #WARRIOR_STEPS do
-	WARRIOR = WARRIOR + StepLength(WARRIOR_STEPS[i])
-end
-local DEMO_LOOP = MAGE + WARRIOR + WARRIOR_REST
-
--- Where the script is: the spell being cast and how far, and the swing if the warrior is fighting.
+-- Where the script is: the spell being cast and how far into it, the swing's
+-- progress while the warrior fights, and the breath left while it runs out.
 local function DemoMoment(elapsed)
 	local t = elapsed % DEMO_LOOP
-	if t < MAGE then
-		local into = t % (FROSTBOLT.time + MAGE_REST)
-		if into < FROSTBOLT.time then
-			return FROSTBOLT, into
-		end
-		return nil
-	end
-	t = t - MAGE
-	if t >= WARRIOR then
-		return nil
-	end
-	for i = 1, #WARRIOR_STEPS do
-		local length = StepLength(WARRIOR_STEPS[i])
-		if t < length then
-			if WARRIOR_STEPS[i] == "slam" then
-				return SLAM, t, 0
+	for i = 1, #BEATS do
+		local beat = BEATS[i]
+		if t < beat.length then
+			if beat.kind == "cast" then
+				return beat.spell, t
+			elseif beat.kind == "fight" then
+				local swing = (t % SWING) / SWING
+				local slam = t - beat.slamAt
+				if slam >= 0 and slam < SLAM.time then
+					return SLAM, slam, swing
+				end
+				return nil, nil, swing
+			elseif beat.kind == "breath" then
+				return nil, nil, nil, BREATH_TIME - t
 			end
-			return nil, nil, t / SWING
+			return nil
 		end
-		t = t - length
+		t = t - beat.length
 	end
 	return nil
 end
 
 -- opts.cast: the cast row may play. opts.melee: the melee row may play.
--- opts.xp: show experience. opts.noTimers: drop the timer rows.
+-- opts.timers: the timer row may play. opts.xp: show experience.
 function DiveBar:PlayDemo(state, now, opts)
 	local profile = self.profile
 	if not self.demoStart then
 		self.demoStart = now
 	end
 	local elapsed = now - self.demoStart
-	local spell, into, swing = DemoMoment(elapsed)
+	local spell, into, swing, breath = DemoMoment(elapsed)
 	if spell and opts.cast and state.mode == "idle" then
 		state.showCast = true
 		state.mode = "cast"
@@ -449,10 +499,10 @@ function DiveBar:PlayDemo(state, now, opts)
 			table.insert(swings, 1, "melee")
 		end
 	end
-	if opts.noTimers then
-		state.timers = {}
-		state.timerProgress = {}
-		state.timerMeta = {}
+	if breath and opts.timers and #(self.mirrors or {}) == 0 then
+		state.timers = { "BREATH" }
+		state.timerProgress = { BREATH = breath / BREATH_TIME }
+		state.timerMeta = { BREATH = { label = BREATH_LABEL or "Breath", value = breath, max = BREATH_TIME } }
 	end
 	if opts.xp then
 		local value = (elapsed % DEMO_XP) / DEMO_XP
@@ -551,7 +601,10 @@ function DiveBar:Tick(elapsed)
 		self:Refresh()
 	elseif self.bar and self.profile then
 		self:Paint(self.bar, state, self:Theme(), self.profile, self.profile.width)
-		if self.Demoing(self.profile) and self.PaintPreview then
+		-- Keep the preview moving in lockstep with the bar: during the demo, and
+		-- whenever a real cast is running, so the preview cast is a true 1:1 mirror.
+		local liveCast = self.cast and self.cast.mode ~= "idle"
+		if self.PaintPreview and (self.Demoing(self.profile) or liveCast) then
 			self:PaintPreview()
 		end
 	end

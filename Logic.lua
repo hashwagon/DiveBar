@@ -38,14 +38,15 @@ local FEATURE_SET = {
 -- and the first-run preview can still run.
 -- Blizzard bars default off. Dive Bar draws its own.
 DiveBar.DEFAULTS = {
-	theme = "Classic",
-	width = 461,
+	theme = "Forever",
+	width = 459,
 	scale = 1,
 	opacity = 1,
 	textSize = 10,
 	lock = false,
-	border = 10,
+	border = 8,
 	margin = 0,
+	hPadding = 0,
 	roundedCorners = true,
 	order = { "cast", "timers", "swings", "xp" },
 	anchor = "xp",
@@ -77,9 +78,9 @@ DiveBar.DEFAULTS = {
 	xpLevelTime = "badge",
 	xpBadgeFormat = "decimal",
 	xpLevelTimeSize = 0,
-	xpBadgeTextSize = 6,
+	xpBadgeTextSize = 5,
 	xpHeight = 6,
-	xpPadding = 0,
+	xpPadding = 1,
 	colors = {
 		melee = { 1, 0.74, 0.35 },
 		off = { 0.86, 0.55, 0.26 },
@@ -338,6 +339,7 @@ function DiveBar.Sanitize(profile)
 	number("swingHeight", 3, 40)
 	number("border", 1, 20)
 	number("margin", 0, 20)
+	number("hPadding", 0, 40)
 	number("xpHeight", 2, 40)
 	number("xpLevelTimeSize", 0, 24)
 	number("xpBadgeTextSize", 4, 24)

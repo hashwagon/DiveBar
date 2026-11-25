@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.5.0
+
+- Options window: rebuilt to sit alongside the game's own panels, narrower and shorter, with the Looking For Group window's art: its dark header behind the Preview, its textured background and gilded inner frame around the settings, and its slim scroll bar.
+- Preview: follows the demo the way the bars do. Rows fold away when they're idle and come back as they play, and the anchored row holds still while the others come and go. The Preview area keeps one size, so the settings below don't move.
+- Preview: a real cast plays in the preview too, in step with the bar.
+- Demo: shorter, with one of each. A Frostbolt, a warrior fight with Slam woven in while the swing timer keeps running, a breath timer running out, and a Hearthstone home.
+- Horizontal padding: a new slider in Look adds room between the bars and the side border. The frame grows to keep the bars at your width.
+- Padding sliders on each bar are now called Vertical padding.
+- Sliders: the gold fill now follows the value, so a full slider reaches the end of the groove.
+- XP badge: the time chip is a little roomier.
+- New profiles start with the Forever theme, a width of 459, a thinner border, smaller badge text, and a pixel of padding around the experience bar.
+
 ## 1.4.0
 
 - Until the first lock, the bars play a demo that alternates a mage casting Frostbolt with a warrior swinging a two-hander and weaving in Slam, while experience fills every 20 seconds. Rows fold away between casts and fights as they do in real use. Real casts and swings show instead.
