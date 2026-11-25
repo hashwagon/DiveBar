@@ -409,7 +409,7 @@ function DiveBar:BuildState()
 	return state
 end
 
--- Until the first lock, or with Play demo on, the bar plays a short script, one
+-- Until the first lock, or after Play in the options, the bar plays a short script, one
 -- of each: a mage casts Frostbolt; a warrior swings a two-hander and weaves a Slam
 -- in as a swing lands, the swing timer running on under it; a breath timer runs
 -- out; then a Hearthstone home. Rows fold away between them as in real use.

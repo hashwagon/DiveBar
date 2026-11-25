@@ -227,6 +227,12 @@ local function PaintedButton(parent, text, width)
 	label:SetText(text)
 	button.label = label
 	button.bg = bg
+	function button:SetText(value)
+		label:SetText(value)
+	end
+	function button:GetFontString()
+		return label
+	end
 	button:SetScript("OnEnter", function()
 		if button.enabled ~= false then
 			ColorTex(bg, 0.38, 0.26, 0.12, 1)
@@ -1428,7 +1434,7 @@ function DiveBar:LayoutPreviewChecks()
 		if check then
 			local left = right - math.ceil(check.label:GetStringWidth() or 0) - 2 - 24
 			check:ClearAllPoints()
-			check:SetPoint("TOPLEFT", header, "TOPLEFT", left, -4)
+			check:SetPoint("TOPLEFT", header, "TOPLEFT", left, 0)
 			right = left - 10
 		end
 	end
@@ -1762,18 +1768,39 @@ function DiveBar:CreateOptions()
 		ColorTex(headerBG, 0, 0, 0, 0.5)
 	end
 	local previewLabel = GoldLabel(header, "Preview", 16)
-	previewLabel:SetPoint("TOPLEFT", 8, -8)
+	previewLabel:SetPoint("TOPLEFT", 8, -4)
 	local previewLine = header:CreateTexture(nil, "ARTWORK")
 	previewLine:SetPoint("TOPLEFT", 8, -26)
 	previewLine:SetSize(SECTION_W, 1)
 	ColorTex(previewLine, 1, 0.82, 0, 0.4)
-	local demo = Check(header, "Play demo", function(value)
-		DiveBar.profile.demo = value
-	end, "Loop sample casts, swings and experience on your bars and in this preview, so you can see how each bar behaves.")
-	demo:SetPoint("TOPLEFT", header, "TOPLEFT", 8 + math.ceil(previewLabel:GetStringWidth() or 60) + 20, -4)
-	demo.Refresh = function()
-		demo:SetChecked(DiveBar.profile.demo)
+	-- One width for both labels, so the button never jumps when it flips.
+	local demo = Button(header, "Pause", 1)
+	local demoW = 0
+	for _, text in ipairs({ "Play", "Pause" }) do
+		demo:SetText(text)
+		local font = demo.GetFontString and demo:GetFontString()
+		demoW = math.max(demoW, math.ceil(font and font:GetStringWidth() or 30))
 	end
+	demoW = math.max(64, demoW + 28)
+	demo:SetSize(demoW, 22)
+	demo:SetPoint("TOPLEFT", header, "TOPLEFT", 8 + math.ceil(previewLabel:GetStringWidth() or 60) + 12, -1)
+	Tooltip(demo, "Demo", "Loop sample casts, swings, timers and experience on your bars and in this preview, so you can see how each bar behaves.")
+	demo:SetScript("OnClick", function()
+		DiveBar.profile.demo = not DiveBar.profile.demo
+		if PlaySound and SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON then
+			PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON)
+		end
+		DiveBar:Refresh()
+	end)
+	demo.Refresh = function()
+		-- Before the first lock the demo always plays, so there is nothing to pause yet.
+		local firstRun = DiveBar.FirstRun(DiveBar.profile)
+		demo:SetText(DiveBar.Demoing(DiveBar.profile) and "Pause" or "Play")
+		demo:SetWidth(demoW)
+		demo:SetButtonEnabled(not firstRun)
+	end
+	controls[#controls + 1] = demo
+	demo.Refresh()
 	self.previewChecks = {}
 	-- Short labels keep all four toggles on the one Preview row in the narrow header.
 	local previewLabels = { cast = "Cast", timers = "Timers", swings = "Swings", xp = "XP" }
@@ -1823,7 +1850,14 @@ function DiveBar:CreateOptions()
 		DiveBar:Refresh()
 		UpdateScroll()
 	end)
-	panel:SetScript("OnHide", HideMenu)
+	panel:SetScript("OnHide", function()
+		HideMenu()
+		-- Play is for looking at settings; closing the window pauses it.
+		if DiveBar.profile and DiveBar.profile.demo then
+			DiveBar.profile.demo = false
+			DiveBar:Refresh()
+		end
+	end)
 
 	if not StaticPopupDialogs.DIVEBAR_CONFIRM then
 		StaticPopupDialogs.DIVEBAR_CONFIRM = {

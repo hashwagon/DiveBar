@@ -15,7 +15,7 @@ Dive Bar is built for and tested on **WoW Forever**. The code also supports Clas
 - **A look that fits your UI.** Choose the Forever theme with its bronze rim, Classic in silver, or Flat, and tune the border, size, padding, and opacity.
 - **No doubled-up bars.** Turn each default Blizzard bar on or off through your active Edit Mode layout, so Dive Bar replaces the old bars instead of sitting next to them.
 - **Profiles for your alts.** Give each character its own setup, or share one across all of them.
-- A minimap button and an options window with a live preview of each bar.
+- A minimap button and an options window with a live preview of each bar. Press **Play** in the preview to loop a short demo of casts, swings, a timer, and experience on your bars. It pauses when you close the window.
 
 ## Installation
 
@@ -82,7 +82,8 @@ WoW runs Lua 5.1. Check syntax with `luac5.1 -p *.lua`; any `luac` catches most 
 | `Minimap.lua` | Minimap button |
 | `Options.lua` | Options window |
 | `DiveBarMinimap.tga`, `DiveBarPortrait.tga` | Minimap button and options window art |
-| `media/` | CurseForge project art. Not packaged. |
+| `DiveBarCorner.tga` | Rounded corner piece for the frame's background |
+| `media/` | CurseForge project art, screenshots, and clips. Not packaged. |
 
 ### Releasing
 

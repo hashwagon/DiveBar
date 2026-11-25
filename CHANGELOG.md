@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.5.1
+
+- Preview: the Play demo checkbox is now a Play button that turns to Pause while the demo runs. It keeps one width, so the row beside it never shifts.
+- Closing the options window pauses the demo.
+- Preview: the heading row sits a little higher, clear of the gold line under it.
+
 ## 1.5.0
 
 - Options window: rebuilt to sit alongside the game's own panels, narrower and shorter, with the Looking For Group window's art: its dark header behind the Preview, its textured background and gilded inner frame around the settings, and its slim scroll bar.

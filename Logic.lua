@@ -553,7 +553,7 @@ function DiveBar.SetLockState(profile, locked)
 	end
 end
 
--- The demo loop plays before the first lock, and whenever Play demo is on.
+-- The demo loop plays before the first lock, and whenever Play is on in the options.
 -- It folds rows the same way real use does, so it doesn't force them all up.
 function DiveBar.Demoing(profile)
 	return type(profile) == "table" and (profile.demo or DiveBar.FirstRun(profile)) and true or false
