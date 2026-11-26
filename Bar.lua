@@ -243,6 +243,14 @@ local function OnePixel(region)
 	return 768 / height / scale
 end
 
+-- Rounds to whole screen pixels. Anything above zero keeps at least one.
+local function Snap(value, px)
+	if value <= 0 then
+		return 0
+	end
+	return math.max(px, math.floor(value / px + 0.5) * px)
+end
+
 local function MakeBorder(bar)
 	local holder = CreateFrame("Frame", nil, bar)
 	holder:SetAllPoints(bar)
@@ -315,11 +323,14 @@ local function PlaceBorder(bar, thickness, rounded, fixed)
 	end
 	-- A band is opaque, so it stops where the rows start. Its corners are its
 	-- own (Forever's chamfers, or square), whatever Rounded corners says.
+	local px = OnePixel(holder)
 	local size = t
 	if holder.band then
 		size = DiveBar.ContentInset(t, true)
 		rounded = true
 	end
+	t = Snap(t, px)
+	size = Snap(size, px)
 	holder.size = size
 	local caps = { holder.tl, holder.tr, holder.bl, holder.br }
 	for i = 1, #caps do
@@ -369,7 +380,6 @@ local function PlaceBorder(bar, thickness, rounded, fixed)
 		holder.right:SetWidth(t)
 	end
 	TileMetal(holder)
-	local px = OnePixel(holder)
 	holder.hairline[1]:SetHeight(px)
 	holder.hairline[2]:SetHeight(px)
 	holder.hairline[3]:SetWidth(px)
@@ -993,16 +1003,30 @@ function DiveBar:Place(bar, state, theme, profile, width)
 		timers = state.timers or {},
 	}
 	local blocks = self.Blocks(profile, spec)
-	local margin = profile.margin or 0
+	-- Every edge sits a whole number of screen pixels from the frame's top, so
+	-- the client rounds them all the same way and matching gaps stay matched.
+	local px = OnePixel(bar)
+	for i = 1, #blocks do
+		local block = blocks[i]
+		block.pad = Snap(block.pad, px)
+		block.barH = Snap(block.barH, px)
+		block.h = block.barH + block.pad * 2
+		block.share = Snap(block.share, px)
+	end
+	local margin = Snap(profile.margin or 0, px)
 	local hpad = tonumber(profile.hPadding) or 0
 	if hpad < 0 then
 		hpad = 0
 	end
+	hpad = Snap(hpad, px)
+	width = Snap(width, px)
 	local contentH = self.ContentHeight(blocks) + margin * 2
 	if contentH < 1 then
 		contentH = 1
 	end
-	local line, inset, frameH = self:ResolveChrome(contentH, theme)
+	local line, inset = self:ResolveChrome(contentH, theme)
+	inset = Snap(inset, px)
+	local frameH = Snap(contentH, px) + inset * 2
 	bar._fitRim = line
 	-- The chrome hugs whatever is actually on screen. The background reaches
 	-- the middle of the silver line and follows its curve in the corners.
@@ -1026,6 +1050,7 @@ function DiveBar:Place(bar, state, theme, profile, width)
 	local tops = {}
 	for i = 1, #blocks do
 		local block = blocks[i]
+		top = top - block.share
 		tops[i] = top
 		local row = self:BlockRow(bar, block)
 		row:Show()
@@ -1344,6 +1369,18 @@ function DiveBar:PaintLevelTime(bar, row, text, filled, troughW, profile, theme,
 	if width < 1 then
 		width = 1
 	end
+	self.xpBadgeFit = { width, height }
+	local fixedW = tonumber(profile.xpBadgeWidth) or 0
+	local fixedH = tonumber(profile.xpBadgeHeight) or 0
+	if fixedW > 0 then
+		width = fixedW
+	end
+	if fixedH > 0 then
+		height = fixedH
+	end
+	local px = OnePixel(badge)
+	width = Snap(width, px)
+	height = Snap(height, px)
 	local badgeLevel = (bar:GetFrameLevel() or 0) + 21
 	badge:SetFrameLevel(badgeLevel)
 	badge:SetSize(width, height)

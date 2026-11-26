@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.6.0
+
+- Fixed: hiding the game's default bars failed with "Can't read the Edit Mode layout" while a custom Edit Mode layout was active. With several custom layouts, the change could land on a layout you weren't using. Dive Bar now finds the layout that's actually active, and leaves the built-in presets alone.
+- Options: each bar's Blizzard box is now "Hide default". Checked hides the game's own bar. Unchecked shows it again with your Edit Mode setting. Your saved choices are unchanged.
+- Options: after you change a Hide default box, closing the window offers a reload, since the game's bars only follow Edit Mode after one.
+- Options: the window is taller, so more settings show at once.
+- Options: the note listing bars that can't be hidden is gone.
+- XP badge: a new Fixed badge size option, with Badge width and Badge height sliders, keeps the badge one size so Time text size only changes the text.
+- Vertical padding now moves in half steps.
+- Neighbouring bars share their padding, so the gap between two bars is the larger of their two paddings rather than both added together. Bars with padding sit closer together.
+- Borders, padding and bar heights line up with whole screen pixels, so matching gaps stay even and edges stay sharp.
+
 ## 1.5.1
 
 - Preview: the Play demo checkbox is now a Play button that turns to Pause while the demo runs. It keeps one width, so the row beside it never shifts.

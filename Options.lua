@@ -689,8 +689,17 @@ function DiveBar:SyncOptions()
 	local levelOff = profile.xpLevelTime == "off"
 	dim(self.xpBadgeFormat, levelOff)
 	fade(self.xpBadgeFormatLabel, levelOff)
+	local isBadge = profile.xpLevelTime == "badge"
+	local badgeFixed = (profile.xpBadgeWidth or 0) > 0 or (profile.xpBadgeHeight or 0) > 0
 	if self.xpLevelTimeSize then
-		self.xpLevelTimeSize:SetLocked(profile.xpLevelTime ~= "badge")
+		self.xpLevelTimeSize:SetLocked(not isBadge or badgeFixed)
+	end
+	dim(self.xpBadgeFixed, not isBadge)
+	if self.xpBadgeWidth then
+		self.xpBadgeWidth:SetLocked(not (isBadge and badgeFixed))
+	end
+	if self.xpBadgeHeight then
+		self.xpBadgeHeight:SetLocked(not (isBadge and badgeFixed))
 	end
 	if self.xpBadgeTextSize then
 		self.xpBadgeTextSize:SetLocked(levelOff)
@@ -796,12 +805,16 @@ function DiveBar:BuildOptionSections(body)
 
 	local function PaddingSlider(host, feature, y)
 		local key = DiveBar.PADDING_KEY[feature]
-		local slider = Slider(host, "Vertical padding", 0, 20, 1, function()
+		local slider = Slider(host, "Vertical padding", 0, 20, 0.5, function()
 			return DiveBar.profile[key]
 		end, function(value)
-			DiveBar.profile[key] = math.floor(value + 0.5)
+			DiveBar.profile[key] = math.floor(value * 2 + 0.5) / 2
 		end, function(value)
-			return tostring(math.floor(value + 0.5))
+			local half = math.floor(value * 2 + 0.5) / 2
+			if half % 1 == 0 then
+				return tostring(math.floor(half))
+			end
+			return string.format("%.1f", half)
 		end)
 		slider:SetPoint("TOPLEFT", COL2, y)
 		return slider
@@ -829,6 +842,12 @@ function DiveBar:BuildOptionSections(body)
 		swings = "Melee, ranged and wand swings.",
 		xp = "Experience, rested XP and completed quest XP.",
 	}
+	local defaultName = {
+		cast = "cast bar",
+		timers = "timer bars",
+		swings = "swing timer",
+		xp = "experience bar",
+	}
 
 	for n = 1, #DiveBar.FEATURE_LIST do
 		local feature = DiveBar.FEATURE_LIST[n]
@@ -845,16 +864,16 @@ function DiveBar:BuildOptionSections(body)
 		enable.Refresh = function()
 			enable:SetChecked(DiveBar.profile[feature])
 		end
-		local blizz = Check(row, "Blizzard", function(value)
-			DiveBar.profile[flag] = value
+		local blizz = Check(row, "Hide default", function(value)
+			DiveBar.profile[flag] = not value
 			DiveBar:ApplySuppression()
-		end, "Keep the game's default bar visible as well. When unchecked, Dive Bar hides it.")
-		blizz:SetPoint("TOPLEFT", 124, -2)
+		end, "Checked: hides the game's default " .. defaultName[feature] .. ".\nUnchecked: shows it, using your Edit Mode setting.\nTakes effect after a reload.")
+		blizz:SetPoint("TOPLEFT", 104, -2)
 		blizz.Refresh = function()
-			blizz:SetChecked(DiveBar.profile[flag])
+			blizz:SetChecked(not DiveBar.profile[flag])
 		end
 		local anchor = Button(row, "Anchor", 72)
-		anchor:SetPoint("TOPLEFT", 214, -4)
+		anchor:SetPoint("TOPLEFT", 218, -4)
 		anchor:SetScript("OnClick", function()
 			if not DiveBar.profile[feature] or DiveBar.profile.anchor == feature then
 				return
@@ -864,7 +883,7 @@ function DiveBar:BuildOptionSections(body)
 		end)
 		Tooltip(anchor, "Anchor", "This bar stays in place. The other bars stack above and below it.")
 		local up = Button(row, "Up", 36)
-		up:SetPoint("TOPLEFT", 292, -4)
+		up:SetPoint("TOPLEFT", 296, -4)
 		up:SetScript("OnClick", function()
 			DiveBar.MoveFeature(DiveBar.profile, feature, -1)
 			DiveBar:Refresh()
@@ -1299,6 +1318,50 @@ function DiveBar:BuildOptionSections(body)
 	Help(levelSize, "Badge padding", "Room around the time inside the badge. Lower it to keep large text in a snug badge.")
 	self.xpLevelTimeSize = levelSize
 	y = y - 58
+	local function BadgeFixed()
+		return (DiveBar.profile.xpBadgeWidth or 0) > 0 or (DiveBar.profile.xpBadgeHeight or 0) > 0
+	end
+	local function BadgeFit(index, fallback)
+		local fit = DiveBar.xpBadgeFit
+		return fit and fit[index] or fallback
+	end
+	local fixedBadge = Check(xpHost, "Fixed badge size", function(value)
+		local profile = DiveBar.profile
+		if value then
+			profile.xpBadgeWidth = math.max(8, math.floor(BadgeFit(1, 24) + 0.5))
+			profile.xpBadgeHeight = math.max(4, math.floor(BadgeFit(2, 12) * 2 + 0.5) / 2)
+		else
+			profile.xpBadgeWidth = 0
+			profile.xpBadgeHeight = 0
+		end
+	end, "Keeps the badge at the width and height below, so Time text size only changes the text.")
+	fixedBadge:SetPoint("TOPLEFT", 4, y)
+	fixedBadge.Refresh = function()
+		fixedBadge:SetChecked(BadgeFixed())
+	end
+	self.xpBadgeFixed = fixedBadge
+	y = y - 34
+	local badgeWidth = Slider(xpHost, "Badge width", 8, 120, 1, function()
+		local value = DiveBar.profile.xpBadgeWidth or 0
+		return value > 0 and value or BadgeFit(1, 24)
+	end, function(value)
+		DiveBar.profile.xpBadgeWidth = math.floor(value + 0.5)
+	end, function(value)
+		return tostring(math.floor(value + 0.5))
+	end)
+	badgeWidth:SetPoint("TOPLEFT", 8, y)
+	self.xpBadgeWidth = badgeWidth
+	local badgeHeight = Slider(xpHost, "Badge height", 4, 40, 0.5, function()
+		local value = DiveBar.profile.xpBadgeHeight or 0
+		return value > 0 and value or BadgeFit(2, 12)
+	end, function(value)
+		DiveBar.profile.xpBadgeHeight = math.floor(value * 2 + 0.5) / 2
+	end, function(value)
+		return string.format("%.1f", value)
+	end)
+	badgeHeight:SetPoint("TOPLEFT", COL2, y)
+	self.xpBadgeHeight = badgeHeight
+	y = y - 58
 	xpHost:SetHeight(-y + 4)
 
 	local profiles = Host(nil)
@@ -1492,7 +1555,7 @@ function DiveBar:CreateOptions()
 	self.options = panel
 	-- Sized to sit alongside the game's own panels (Looking For Group and the
 	-- like). The sections scroll, so a shorter frame just shows fewer at once.
-	panel:SetSize(720, 506)
+	panel:SetSize(720, 557)
 	panel:SetFrameStrata("DIALOG")
 	panel:SetClampedToScreen(true)
 	panel:SetMovable(true)
@@ -1844,8 +1907,29 @@ function DiveBar:CreateOptions()
 	self:BuildOptionSections(body)
 	self:LayoutOptions()
 	UpdateScroll()
+	-- Edit Mode applies a saved layout only when the UI loads, so a changed
+	-- Hide default box needs a reload before the game's bar follows it.
+	local shownOnOpen = {}
+	local function HideFlagsChanged()
+		local missing = DiveBar.blizzMissing
+		if not missing or not DiveBar.profile then
+			return false
+		end
+		for i = 1, #DiveBar.FEATURE_LIST do
+			local feature = DiveBar.FEATURE_LIST[i]
+			local shown = DiveBar.profile[DiveBar.BLIZZARD_FLAG[feature]] and true or false
+			if not missing[feature] and shownOnOpen[feature] ~= shown then
+				return true
+			end
+		end
+		return false
+	end
 	panel:SetScript("OnShow", function()
 		HideMenu()
+		for i = 1, #DiveBar.FEATURE_LIST do
+			local feature = DiveBar.FEATURE_LIST[i]
+			shownOnOpen[feature] = DiveBar.profile[DiveBar.BLIZZARD_FLAG[feature]] and true or false
+		end
 		DiveBar:SyncOptions()
 		DiveBar:Refresh()
 		UpdateScroll()
@@ -1857,7 +1941,25 @@ function DiveBar:CreateOptions()
 			DiveBar.profile.demo = false
 			DiveBar:Refresh()
 		end
+		if HideFlagsChanged() then
+			StaticPopup_Show("DIVEBAR_RELOAD")
+		end
 	end)
+
+	if not StaticPopupDialogs.DIVEBAR_RELOAD then
+		StaticPopupDialogs.DIVEBAR_RELOAD = {
+			text = "Reload now to show or hide the game's default bars?",
+			button1 = RELOADUI or "Reload",
+			button2 = LATER or "Later",
+			OnAccept = function()
+				ReloadUI()
+			end,
+			timeout = 0,
+			whileDead = true,
+			hideOnEscape = true,
+			preferredIndex = 3,
+		}
+	end
 
 	if not StaticPopupDialogs.DIVEBAR_CONFIRM then
 		StaticPopupDialogs.DIVEBAR_CONFIRM = {

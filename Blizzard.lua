@@ -12,13 +12,6 @@ local SYSTEM_NAME = {
 	xp = "StatusTrackingBar",
 }
 
-local BLIZZARD_NAME = {
-	cast = "cast bar",
-	timers = "timer bars",
-	swings = "swing timer",
-	xp = "experience bar",
-}
-
 local function SystemId(name)
 	local systems = Enum and Enum.EditModeSystem
 	if type(systems) ~= "table" then
@@ -27,15 +20,40 @@ local function SystemId(name)
 	return systems[name]
 end
 
+-- activeLayout counts the presets first, but layouts.layouts holds only the
+-- saved custom layouts. Retail has 2 presets and WoW Forever has 3.
+local function PresetCount()
+	local manager = EditModePresetLayoutManager
+	if type(manager) == "table" and manager.GetCopyOfPresetLayouts then
+		local ok, presets = pcall(manager.GetCopyOfPresetLayouts, manager)
+		if ok and type(presets) == "table" then
+			return #presets
+		end
+	end
+	local meta = Enum and Enum.EditModePresetLayoutsMeta
+	if type(meta) == "table" and type(meta.NumValues) == "number" then
+		return meta.NumValues
+	end
+	return nil
+end
+
 local function ActiveLayout(layouts)
-	if type(layouts) ~= "table" or type(layouts.layouts) ~= "table" then
+	if type(layouts) ~= "table" or type(layouts.layouts) ~= "table" or type(layouts.activeLayout) ~= "number" then
 		return nil
 	end
-	local layout = layouts.layouts[layouts.activeLayout]
+	local presets = PresetCount()
+	if not presets then
+		return nil
+	end
+	local index = layouts.activeLayout - presets
+	if index < 1 then
+		return nil, true
+	end
+	local layout = layouts.layouts[index]
 	if type(layout) ~= "table" or type(layout.systems) ~= "table" then
 		return nil
 	end
-	return layout
+	return layout, false
 end
 
 local function IsPreset(layout)
@@ -154,20 +172,6 @@ local function WriteSetting(system, setting, value)
 	return true
 end
 
-local function Join(names)
-	if #names == 1 then
-		return names[1]
-	end
-	if #names == 2 then
-		return names[1] .. " and " .. names[2]
-	end
-	local copy = {}
-	for i = 1, #names - 1 do
-		copy[i] = names[i]
-	end
-	return table.concat(copy, ", ") .. ", and " .. names[#names]
-end
-
 function DiveBar:ApplyBlizzardBars()
 	local profile = self.profile
 	if not profile then
@@ -184,24 +188,29 @@ function DiveBar:ApplyBlizzardBars()
 		return
 	end
 	local note
+	self.blizzMissing = nil
 	if not (C_EditMode and C_EditMode.GetLayouts and C_EditMode.SaveLayouts and SystemId("CastBar")) then
 		self.blizzNote = "This client can't hide the Blizzard bars."
 		return
 	end
 	local ok, layouts = pcall(C_EditMode.GetLayouts)
-	local layout = ok and ActiveLayout(layouts) or nil
-	if not layout then
-		self.blizzNote = "Can't read the Edit Mode layout, so the Blizzard bars can't be hidden."
+	local layout, preset
+	if ok then
+		layout, preset = ActiveLayout(layouts)
+	end
+	if preset or IsPreset(layout) then
+		self.blizzNote = "Save a custom Edit Mode layout to hide Blizzard bars."
 		return
 	end
-	if IsPreset(layout) then
-		self.blizzNote = "Save a custom Edit Mode layout to hide Blizzard bars."
+	if not layout then
+		self.blizzNote = "Can't read the Edit Mode layout, so the Blizzard bars can't be hidden."
 		return
 	end
 	if type(profile.blizzRestore) ~= "table" then
 		profile.blizzRestore = {}
 	end
 	local missing = {}
+	self.blizzMissing = missing
 	local changed = false
 	for i = 1, #self.FEATURE_LIST do
 		local feature = self.FEATURE_LIST[i]
@@ -233,8 +242,8 @@ function DiveBar:ApplyBlizzardBars()
 				end
 			end
 		end
-		if not wantShown and not matched then
-			missing[#missing + 1] = BLIZZARD_NAME[feature]
+		if not matched then
+			missing[feature] = true
 		end
 	end
 	if changed then
@@ -242,9 +251,6 @@ function DiveBar:ApplyBlizzardBars()
 		if not saved then
 			note = "Can't save the Edit Mode layout."
 		end
-	end
-	if not note and #missing > 0 then
-		note = "No hide option for the Blizzard " .. Join(missing) .. "."
 	end
 	self.blizzNote = note
 end

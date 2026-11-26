@@ -79,6 +79,9 @@ DiveBar.DEFAULTS = {
 	xpBadgeFormat = "decimal",
 	xpLevelTimeSize = 0,
 	xpBadgeTextSize = 5,
+	-- 0 fits the badge to its text.
+	xpBadgeWidth = 0,
+	xpBadgeHeight = 0,
 	xpHeight = 6,
 	xpPadding = 1,
 	colors = {
@@ -343,6 +346,8 @@ function DiveBar.Sanitize(profile)
 	number("xpHeight", 2, 40)
 	number("xpLevelTimeSize", 0, 24)
 	number("xpBadgeTextSize", 4, 24)
+	number("xpBadgeWidth", 0, 120)
+	number("xpBadgeHeight", 0, 40)
 	for _, key in pairs(DiveBar.PADDING_KEY) do
 		number(key, 0, 20)
 	end
@@ -634,6 +639,8 @@ end
 
 -- spec.cast, spec.xp, spec.swings, spec.timers. Order is top to bottom.
 -- barH is the trough. h adds that bar's padding above and below it.
+-- Neighbouring rows share padding, so the gap between two bars is the larger
+-- of their paddings. share is how far a row overlaps the one above it.
 function DiveBar.Blocks(profile, spec)
 	spec = spec or {}
 	local order = DiveBar.OrderedFeatures(profile)
@@ -643,6 +650,8 @@ function DiveBar.Blocks(profile, spec)
 		block.pad = pad
 		block.barH = barH
 		block.h = barH + pad * 2
+		local above = blocks[#blocks]
+		block.share = above and math.min(above.pad, pad) or 0
 		blocks[#blocks + 1] = block
 	end
 	for i = 1, #order do
@@ -667,7 +676,7 @@ end
 function DiveBar.ContentHeight(blocks)
 	local height = 0
 	for i = 1, #blocks do
-		height = height + blocks[i].h
+		height = height + blocks[i].h - blocks[i].share
 	end
 	return height
 end
