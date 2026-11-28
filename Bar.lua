@@ -567,7 +567,7 @@ local function MakeBadge(row)
 	badge:EnableMouse(false)
 	badge.fill = Solid(badge, "BACKGROUND", 0)
 	Color(badge.fill, BADGE_FILL)
-	-- The edge marker: a thin XP-blue line just inside the silver rim on the
+	-- The edge marker: a thin accent line just inside the silver rim on the
 	-- edge that marks the fill. It sits above the fill and under the rim and text.
 	-- Its glow only ever bleeds to the left, toward the completed XP.
 	badge.markGlow = Solid(badge, "ARTWORK", 1)
@@ -1309,7 +1309,7 @@ function DiveBar:Paint(bar, state, theme, profile, width)
 		local currentW = AnchorFill(bar.xp.current, bar.xp.trough, value, false, swingInner)
 		PlaceSegment(bar.xp.rested, bar.xp.trough, currentW, swingInner * restedFit)
 		PlaceSegment(bar.xp.quest, bar.xp.trough, currentW, swingInner * questFit)
-		self:PaintLevelTime(bar, bar.xp, state.xpBadge, currentW, swingInner, profile, theme, base + 4)
+		self:PaintLevelTime(bar, bar.xp, state.xpBadge, currentW, swingInner, profile, theme, base + 4, self.XPBadgeMarkColor(rested))
 	end
 end
 
@@ -1328,7 +1328,7 @@ local function SetLevelText(fs, text, size, flags)
 	end
 end
 
-function DiveBar:PaintLevelTime(bar, row, text, filled, troughW, profile, theme, level)
+function DiveBar:PaintLevelTime(bar, row, text, filled, troughW, profile, theme, level, markColor)
 	row.badgeText = text
 	local badge = row.badge
 	local label = row.levelText
@@ -1394,7 +1394,7 @@ function DiveBar:PaintLevelTime(bar, row, text, filled, troughW, profile, theme,
 	PlaceBadgeFill(badge, rim, rounded)
 	PlaceBorder(badge, rim, rounded, true)
 	PaintBorder(holder, theme, holder.skin == "solid" and 1 or 0.85)
-	-- Whichever rim edge lands on the end of the blue fill is the measuring edge.
+	-- Whichever rim edge lands on the end of the purple fill is the measuring edge.
 	local rightMark = offset + width - shadow
 	local leftMark = offset + shadow
 	local markRight = math.abs(rightMark - filled) <= math.abs(leftMark - filled)
@@ -1410,13 +1410,14 @@ function DiveBar:PaintLevelTime(bar, row, text, filled, troughW, profile, theme,
 	end
 	local markW = math.max(1, rim * 0.3)
 	local mark = badge.mark
-	Color(mark, self.XP_BADGE_MARK_COLOR)
+	markColor = markColor or self.XP_BADGE_MARK_COLOR
+	Color(mark, markColor)
 	mark:SetWidth(markW)
 	mark:ClearAllPoints()
 	-- The glow bleeds left from the marker. On the right edge it stays inside
 	-- the fill, short of the digits; on the left edge it runs out over the XP.
 	local glow = badge.markGlow
-	HGlow(glow, self.XP_BADGE_MARK_COLOR, 0.5)
+	HGlow(glow, markColor, 0.5)
 	glow:ClearAllPoints()
 	local reach = math.max(3, height * 0.6)
 	if markRight then

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.6.1
+
+- Experience: the filled XP is purple, and rested XP extends past it in blue.
+- XP badge: the edge accent is light blue while rested XP remains, and purple once that rest is gone.
+
 ## 1.6.0
 
 - Fixed: hiding the game's default bars failed with "Can't read the Edit Mode layout" while a custom Edit Mode layout was active. With several custom layouts, the change could land on a layout you weren't using. Dive Bar now finds the layout that's actually active, and leaves the built-in presets alone.

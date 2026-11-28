@@ -1,4 +1,4 @@
--- Experience uses the standard blue bar and the purple rested extension.
+-- Experience uses the standard purple bar and the blue rested extension.
 -- Completed quests add a yellow extension from the same point. The shorter
 -- of rested and quest XP is drawn above the other. The quest total is the
 -- reward the log reports, which can differ a little from the turn-in.
@@ -273,7 +273,7 @@ function DiveBar.XPBadgeFillInset(line, rounded)
 	return silver, corner
 end
 
--- The right edge sits on the end of the blue fill. When the fill is narrower
+-- The right edge sits on the end of the purple fill. When the fill is narrower
 -- than the chip, the chip starts at that end instead, so its edge still marks the XP.
 -- shadow is the clear outer band of the chip's rim; the visible edge is inside it.
 function DiveBar.XPBadgeOffset(filled, chipW, troughW, shadow)

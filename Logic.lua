@@ -797,15 +797,25 @@ function DiveBar.FitChrome(contentH, edge, rim, rounded)
 	return line, inset, frameH
 end
 
--- Standard experience-bar colors: current XP blue, rested purple, completed quests yellow.
-DiveBar.XP_COLOR = { 0.0, 0.39, 0.88 }
-DiveBar.RESTED_COLOR = { 0.58, 0.0, 0.55 }
+-- Standard experience-bar colors: current XP purple, rested blue, completed quests yellow.
+DiveBar.XP_COLOR = { 0.58, 0.0, 0.55 }
+DiveBar.RESTED_COLOR = { 0.0, 0.39, 0.88 }
 DiveBar.QUEST_COLOR = { 1, 0.82, 0 }
-DiveBar.XP_COLOR_TOP = { 0.55, 0.78, 1.0 }
-DiveBar.RESTED_COLOR_TOP = { 0.82, 0.45, 0.86 }
+DiveBar.XP_COLOR_TOP = { 0.82, 0.45, 0.86 }
+DiveBar.RESTED_COLOR_TOP = { 0.55, 0.78, 1.0 }
 DiveBar.QUEST_COLOR_TOP = { 1, 0.95, 0.55 }
--- The badge marker is a thin line on a dark fill, so it needs a lighter blue than the bar.
-DiveBar.XP_BADGE_MARK_COLOR = { 0.3, 0.68, 1.0 }
+-- The badge marker is a thin line on a dark chip, with the same glow either way.
+-- Rested XP keeps the original light blue. With no rest, both strong channels of the
+-- purple are lifted to full so it reads as brightly as that blue.
+DiveBar.XP_BADGE_MARK_RESTED = { 0.3, 0.68, 1.0 }
+DiveBar.XP_BADGE_MARK_COLOR = { 1.0, 0.45, 1.0 }
+
+function DiveBar.XPBadgeMarkColor(rested)
+	if (tonumber(rested) or 0) > 0 then
+		return DiveBar.XP_BADGE_MARK_RESTED
+	end
+	return DiveBar.XP_BADGE_MARK_COLOR
+end
 
 function DiveBar.XPRoom(current)
 	local value = tonumber(current) or 0
